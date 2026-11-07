@@ -11,6 +11,8 @@ const OUT = path.resolve("out");
 const W = 1600, H = 900;
 fs.mkdirSync(OUT, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// A navigation still pending when the browser closes should not hide the real error.
+process.on("unhandledRejection", (e) => { if (!/closed/i.test(String(e?.message))) console.error(e); });
 
 import { LINES } from "./script.mjs";
 const CAPTIONS = LINES.slice(0, 5).map((t, i) => (i === 3 ? t.replace("there.", "there (demo entry shown).") : t));
@@ -173,6 +175,9 @@ try {
   });
   await wait(1200); await hold(5); await wait(1200);
   fs.writeFileSync(path.join(OUT, "timing.json"), JSON.stringify({ keepFrom, marks, total: (Date.now() - t0) / 1000 }, null, 1));
+} catch (e) {
+  console.error("\nRECORDING FAILED:", e?.message || e);
+  process.exitCode = 1;
 } finally {
   await fetch(URL + "api/pipeline", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(backup) })
     .then(() => console.log("team notes restored")).catch((e) => console.error("RESTORE FAILED, notes are in", backupFile, e));
