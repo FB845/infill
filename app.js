@@ -308,7 +308,7 @@ async function callSheet(id) {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || r.status);
       sheet = j;
-    } catch (e) { sheet = templateSheet(p); sheet.model += ` · Claude call failed: ${e.message}`; }
+    } catch (e) { sheet = templateSheet(p); sheet.model = `template (Claude call failed: ${e.message})`; }
   } else sheet = templateSheet(p);
   callCache[id] = sheet; showCall(id, sheet);
 }

@@ -38,27 +38,54 @@ Rules:
 - No personal information. Do not name or guess an owner.
 - This is screening, not a zoning, legal or financial determination. Say "confirm with the city" where it matters.
 - The email is a DRAFT for a human to edit and send. Address it to "City of {city} housing / planning staff". Use [brackets] for anything the user must fill in.
-Return ONLY a JSON object with these keys:
-{"headline": one sentence,
- "known": [up to 5 short bullets of what the data shows, each ending with its source name in parentheses],
- "unknown": [up to 5 short bullets of what is still unknown],
- "ask_city": [3-5 questions for city housing or planning staff],
- "ask_on_site": [3-5 things to look for or measure on a site visit or existing-conditions survey],
- "email_subject": string,
- "email_body": string (under 150 words)}"""
+Return the call sheet by calling the call_sheet tool."""
+
+CALL_SHEET_TOOL = {
+    "name": "call_sheet",
+    "description": "Return the call sheet for this site.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "headline": {"type": "string", "description": "One sentence."},
+            "known": {"type": "array", "items": {"type": "string"}, "description": "Up to 5 bullets of what the data shows, each ending with its source name in parentheses."},
+            "unknown": {"type": "array", "items": {"type": "string"}, "description": "Up to 5 bullets of what is still unknown and what would settle it."},
+            "ask_city": {"type": "array", "items": {"type": "string"}, "description": "3-5 questions for city housing or planning staff."},
+            "ask_on_site": {"type": "array", "items": {"type": "string"}, "description": "3-5 things to look for or measure on a site visit or existing-conditions survey."},
+            "email_subject": {"type": "string"},
+            "email_body": {"type": "string", "description": "Under 150 words. A draft for a human to edit and send."},
+        },
+        "required": ["headline", "known", "unknown", "ask_city", "ask_on_site", "email_subject", "email_body"],
+    },
+}
 
 def claude(site):
-    body = {"model": MODEL, "max_tokens": 1400, "system": SYSTEM,
+    body = {"model": MODEL, "max_tokens": 2000, "system": SYSTEM,
+            "tools": [CALL_SHEET_TOOL], "tool_choice": {"type": "tool", "name": "call_sheet"},
             "messages": [{"role": "user", "content": "Site JSON:\n" + json.dumps(site, indent=1)}]}
     req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=json.dumps(body).encode(),
                                  headers={"x-api-key": KEY, "anthropic-version": "2023-06-01",
                                           "content-type": "application/json"})
-    with urllib.request.urlopen(req, timeout=90) as r:
-        d = json.loads(r.read().decode())
-    text = "".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text").strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1].rsplit("```", 1)[0]
-    out = json.loads(text[text.find("{"): text.rfind("}") + 1])
+    with urllib.request.urlopen(req, timeout=120) as r:
+        raw = r.read().decode()
+    try:
+        d = json.loads(raw)
+    except ValueError:
+        sys.stderr.write(f"[callsheet] non-JSON response: {raw[:500]}\n")
+        raise RuntimeError("Claude API returned a non-JSON response (see server log)")
+    blocks = d.get("content", [])
+    tool = next((b for b in blocks if b.get("type") == "tool_use" and b.get("name") == "call_sheet"), None)
+    if tool and isinstance(tool.get("input"), dict):
+        out = tool["input"]
+    else:
+        text = "".join(b.get("text", "") for b in blocks if b.get("type") == "text").strip()
+        i, j = text.find("{"), text.rfind("}")
+        if i < 0 or j < i:
+            sys.stderr.write(f"[callsheet] no tool call or JSON. stop_reason={d.get('stop_reason')} blocks={[b.get('type') for b in blocks]} text={text[:400]!r}\n")
+            raise RuntimeError(f"Claude replied without a call sheet (stop_reason {d.get('stop_reason')}; see server log)")
+        out = json.loads(text[i:j + 1])
+    for k in ("known", "unknown", "ask_city", "ask_on_site"):
+        if isinstance(out.get(k), str):
+            out[k] = [out[k]]
     out["model"] = d.get("model", MODEL)
     return out
 
