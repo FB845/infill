@@ -103,14 +103,25 @@ def check(lat, lng):
     site_m2 = B.area_m2(g)
     checks, assumptions = [], []
     # Still available? building coverage
-    fps = R["fps"]
+    fps, fp_note = R["fps"], ""
+    if fps is None:
+        # Fallback: if this lot is a housing-element site we already downloaded, use its cached footprints.
+        for d in sorted(glob.glob(os.path.join(B.RAW, "*"))):
+            sites = B.load(os.path.relpath(os.path.join(d, "he_sites.geojson"), B.RAW)) or {}
+            hit = next((f for f in sites.get("features", []) if f["properties"].get("PID24") == pid), None)
+            fp_file = hit and os.path.join(d, "footprints", f"{hit['properties'].get('OBJECTID')}.json")
+            if fp_file and os.path.exists(fp_file):
+                fps = json.load(open(fp_file))
+                day = (open(os.path.join(d, "FETCHED_AT.txt")).read().strip()[:10] if os.path.exists(os.path.join(d, "FETCHED_AT.txt")) else "date unknown")
+                fp_note = f" (live service didn't answer; checked against the copy downloaded {day})"
+                break
     b_m2 = sum(B.area_m2(x.get("geometry")) for x in (fps or []) if (cc := B.centroid(x.get("geometry"))) and B.in_geom(cc, g))
     cov = min(b_m2 / site_m2, 1.0) if (site_m2 and fps is not None) else None
     if cov is None:
         checks.append({"group": "Still available?", "test": "Building coverage", "status": "unknown", "detail": "Footprint service didn't answer or lot area unknown", "source": S["footprints"][0], "url": S["footprints"][1]})
     else:
         st = "pass" if cov < B.COVER_OPEN else ("fail" if cov > B.COVER_BUILT else "unknown")
-        checks.append({"group": "Still available?", "test": "Building coverage", "status": st, "detail": f"Buildings cover about {cov*100:.0f}% of the lot (estimate)", "source": S["footprints"][0], "url": S["footprints"][1]})
+        checks.append({"group": "Still available?", "test": "Building coverage", "status": st, "detail": f"Buildings cover about {cov*100:.0f}% of the lot (estimate)" + fp_note, "source": S["footprints"][0], "url": S["footprints"][1]})
         assumptions.append(f"ASSUMPTION: under {int(B.COVER_OPEN*100)}% coverage = mostly open; over {int(B.COVER_BUILT*100)}% = may be built out")
     # Usable? flood, fire, transit (center of the lot)
     def cached_hits(key, pt):
