@@ -150,7 +150,7 @@ function setBase(i) {
 }
 setBase(0);
 
-let topOnly = true, view = "map", showSurplus = true, showArchived = false;
+let topOnly = true, view = "map", showSurplus = true, showArchived = true;
 const active = new Set();
 const filtersEl = document.getElementById("filters");
 for (const [k, label] of Object.entries(FLAGS)) {
@@ -328,7 +328,8 @@ function renderCard(id) {
   const facts = [p.kind === "surplus" && p.apn ? `APN ${esc(p.apn)}` : null, p.acres != null ? `${p.acres} ac` : null, esc(p.city)].filter(Boolean).join(" · ");
   const extra = [p.zoning ? `Zoning ${esc(p.zoning)}` : null, p.landuse_code ? `SCAG land use ${esc(p.landuse_code)}` : null,
                  p.agency ? `Agency ${esc(p.agency)}` : null, p.existing_use ? `Existing use: ${esc(p.existing_use)}` : null,
-                 p.notice_date ? `Notice ${esc(p.notice_date)}` : null].filter(Boolean).join(" · ");
+                 p.notice_date ? `Notice issued ${esc(p.notice_date)}` : null, p.case ? `Case ${esc(p.case)}` : null,
+                 p.notice_link ? `<a href="${esc(p.notice_link)}" target="_blank" rel="noopener">Agency notice ↗</a>` : null].filter(Boolean).join(" · ");
   const visits = s.visits.slice().reverse().map((v) => {
     const fv = FOUND.find((x) => x[0] === v.found);
     return `<li><b>${esc(v.date)}</b> · ${esc(fv ? fv[1] : v.found)}${v.buildings ? ` · ${esc(v.buildings)} bldg` : ""}${v.survey ? ` · ${esc(v.survey.method)}${v.survey.sqft ? `, ${esc(v.survey.sqft)} sq ft` : ""}${v.survey.link ? ` · <a href="${esc(v.survey.link)}" target="_blank" rel="noopener">survey files</a>` : ""}` : ""}${v.note ? `<div class="meta">${esc(v.note)}</div>` : ""}</li>`;

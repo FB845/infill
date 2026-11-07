@@ -17,7 +17,7 @@ A one-person acquisitions lead at a small housing nonprofit in Orange County (th
 
 ## What we built
 
-A map of every adopted housing-element site in Anaheim (124 sites, from SCAG's regional layer). Each site is checked against public data:
+A map of every adopted housing-element site in a city, from SCAG's regional layer, plus public land that local agencies have listed as surplus. Four Orange County cities are built in and can be switched from the city picker: **Anaheim (124 sites), Garden Grove (946), Irvine (44) and Fullerton (3)**. Any of the 28 Orange County jurisdictions in the layer can be added with one command. Each site is checked against public data:
 
 | Question | Check | Data |
 |---|---|---|
@@ -27,9 +27,13 @@ A map of every adopted housing-element site in Anaheim (124 sites, from SCAG's r
 | Usable? | Inside a high-quality transit area? (parking minimums may not apply under AB 2097) | Caltrans HQTA |
 | Room for lower-income homes? | Lower-income capacity the city itself listed | SCAG Housing Element Sites |
 
+**Surplus public land** (the brief's idea #3): HCD's Surplus Land Act notices are joined to the same map as their own layer, with the agency, size, zoning text, existing use, notice date and the same flood, fire and transit checks. The data is messy, as the brief warned: of 3,112 notices statewide, only 30 are marked Active and 3,081 are "Archive". All 22 notices in the four built-in cities are archived, so they are shown as leads to re-check, never as available land. Contact names and emails in the notices are not copied into the tool.
+
 Each check is **pass**, **fail** or **unknown**. Unknown means the data was missing or the result is in a gray zone, and the tool says so instead of guessing. Sites are ranked with simple weights shown on screen, and every site card ends with "verify on the ground": confirm what is actually on the lot, who owns it and whether they'd sell, and check eligibility with the city.
 
 What it found on November 7, 2026:
+
+Across the four cities: 1,117 housing-element sites and 22 surplus notices. In Anaheim:
 
 - 124 adopted sites in Anaheim (housing element year 2025), with 8,887 homes of listed capacity, of which 576 are listed as lower-income.
 - Only 18 of the 124 sites list any lower-income capacity. The top 10 covers 343 of the 576.
@@ -79,8 +83,9 @@ The repo includes the processed data (`data/sites.js`). To re-pull the public da
 ```bash
 python3 scripts/fetch_data.py                   # downloads and caches into raw/ (about 3 minutes, gentle on public servers)
 python3 scripts/build_sites.py                  # writes data/sites.js and prints the top 10
-python3 scripts/fetch_data.py --city Fullerton  # any city in the SCAG housing-element layer
-python3 scripts/build_sites.py --city Fullerton
+python3 scripts/fetch_data.py --list               # the 28 OC jurisdictions in the layer
+python3 scripts/fetch_data.py --city "Buena Park"   # add any of them, then:
+python3 scripts/build_sites.py --city "Buena Park"  # it appears in the city picker
 ```
 
 The only key is the optional `ANTHROPIC_API_KEY`, read by the local server and never sent to the browser or committed. Leaflet 1.9.4 is vendored in `vendor/` so the demo runs on slow Wi-Fi. Only the street basemap tiles need internet.
@@ -97,6 +102,7 @@ The only key is the optional `ANTHROPIC_API_KEY`, read by the local server and n
 | Fire zones | [OC Fire Hazard Severity Zones LRA](https://www.ocgis.com/arcpub/rest/services/Map_Layers/Fire_Hazard_Severity_Zones_LRA/MapServer/0) | 2026-11-07 |
 | Transit | [Caltrans CA HQ Transit Areas](https://caltrans-gis.dot.ca.gov/arcgis/rest/services/CHrailroad/CA_HQ_Transit_Areas/FeatureServer/0) | 2026-11-07 |
 | AB 2097 (no minimum parking near major transit) | [HCD Technical Advisory](https://www.hcd.ca.gov/sites/default/files/docs/policy-and-research/ab-2097-ta.pdf) | 2026-11-07 |
+| Surplus public land notices | [HCD Surplus Land Act Notices of Availability](https://data.ca.gov/dataset/surplus-land-act-notices-of-availability-received) (data.ca.gov CSV) | 2026-11-07 |
 | Starting list of sources | [Lane 1 DATA-SOURCES.md](https://github.com/travcjohnson/claude-impact-lab-uci/blob/main/lanes/1-find-it/data/DATA-SOURCES.md) | 2026-11-07 |
 | Buildings cover under 15% of the lot = mostly open | ASSUMPTION (our threshold) | |
 | Buildings cover over 40% of the lot = may be built out | ASSUMPTION (our threshold) | |
@@ -110,7 +116,9 @@ Every number we made up is labelled ASSUMPTION here and in the tool.
 
 | Part | Status |
 |---|---|
-| Housing-element sites, capacity, zoning, land use | Working: real public data |
+| Housing-element sites, capacity, zoning, land use | Working: real public data, 4 cities built in |
+| Surplus public land layer | Working: real HCD notices; all in the 4 cities are archived, shown as leads |
+| Grid references on site cards | Infill's own 8×8 grid over each city's sites (Thomas Guide style, not Thomas Guide pages) |
 | Building coverage check | Working: real data, our thresholds |
 | Flood, fire and transit checks | Working: real data |
 | Building vs. land value check | Partly working: code is in place, but only Santa Ana publishes values for free, and Santa Ana is missing from the site layer |
@@ -134,9 +142,11 @@ Every number we made up is labelled ASSUMPTION here and in the tool.
 
 ## Next steps
 
+See [ROADMAP.md](ROADMAP.md) for the longer view: all of Orange County, then LA and the Inland Empire, a fire-rebuild mode, coastal checks, and ADU-ready lots.
+
 **For a nonprofit to use it next month:**
-- Run it for every city in the layer (one flag: `--city`).
-- Add the city's surplus-land notices (HCD, data.ca.gov) and SB 4 faith-land leads (worship sites + IRS exempt-org file, labelled as leads, not facts).
+- Build every city in the layer (one command each).
+- Add SB 4 faith-land leads (worship sites + IRS exempt-org file, labelled as leads, not facts).
 - Add a "who to call" field from public sources.
 
 **With one more week:**

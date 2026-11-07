@@ -123,18 +123,20 @@ def surplus_sites(city, flood_i, fire_i, hqta_i, have, day):
         rows = list(csv.DictReader(f))
     H = list(rows[0].keys()) if rows else []
     c_city = col(H, r"^city$", r"city", avoid=r"county")
-    c_lat, c_lon = col(H, r"^lat", r"latitude"), col(H, r"^lon", r"^long", r"longitude")
+    c_lat, c_lon = col(H, r"^lat", r"latitude", r"^y$"), col(H, r"^lon", r"^long", r"longitude", r"^x$")
     c_status = col(H, r"status")
     c_apn = col(H, r"^apn", r"parcel.?num", r"\bapn\b")
     c_addr = col(H, r"address", r"location", avoid=r"email|mail|contact")
     c_acres = col(H, r"acre")
     c_size = col(H, r"parcel.?size", r"size")
-    c_agency = col(H, r"agency", r"jurisdiction", r"local.?gov", avoid=r"contact|email|phone")
+    c_case = col(H, r"parent.?case", r"case")
+    c_agency = col(H, r"^local agency$", r"agency", r"jurisdiction", r"local.?gov", avoid=r"contact|email|phone|type")
     c_zone = col(H, r"zoning")
-    c_gp = col(H, r"general.?plan")
+    c_link = col(H, r"website", r"link", r"url")
+    c_gp = col(H, r"general.?plan", avoid=r"zoning")
     c_use = col(H, r"existing.?use", r"current.?use", r"use")
-    c_date = col(H, r"date", r"received")
-    print(f"  surplus columns: city={c_city} lat={c_lat} lon={c_lon} status={c_status} apn={c_apn} addr={c_addr} acres={c_acres} size={c_size} agency={c_agency}")
+    c_date = col(H, r"date.?notice.?issued", r"date", r"received", avoid=r"due")
+    print(f"  surplus columns: city={c_city} lat={c_lat} lon={c_lon} status={c_status} apn={c_apn} addr={c_addr} acres={c_acres} agency={c_agency} zoning={c_zone} use={c_use} date={c_date} link={c_link}")
     key = re.sub(r"[^a-z]", "", city.lower())
     out = []
     for i, r in enumerate(rows):
@@ -171,9 +173,11 @@ def surplus_sites(city, flood_i, fire_i, hqta_i, have, day):
         unknowns = sum(1 for x in checks if x["status"] == "unknown")
         out.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": {
             "id": f"SL-{i}", "kind": "surplus", "label": addr or (f"APN {apn}" if apn else f"Surplus notice {i}"), "apn": apn,
-            "city": city, "acres": round(acres, 2) if acres else None, "zoning": (str(r.get(c_zone) or "").strip() or None) if c_zone else None,
+            "city": city, "acres": round(acres, 2) if acres else None, "zoning": (re.sub(r"\s+", " ", str(r.get(c_zone) or "")).strip()[:140] or None) if c_zone else None,
             "general_plan": (str(r.get(c_gp) or "").strip() or None) if c_gp else None,
-            "existing_use": (str(r.get(c_use) or "").strip() or None) if c_use else None,
+            "existing_use": (re.sub(r"\s+", " ", str(r.get(c_use) or "")).strip()[:100] or None) if c_use else None,
+            "notice_link": (str(r.get(c_link) or "").strip() or None) if c_link else None,
+            "case": (str(r.get(c_case) or "").strip() or None) if c_case else None,
             "agency": agency or None, "notice_date": (str(r.get(c_date) or "").strip() or None) if c_date else None,
             "active": active, "status_text": status or None,
             "checks": checks, "assumptions": [], "confidence": "high" if unknowns == 0 else ("medium" if unknowns == 1 else "low"),
