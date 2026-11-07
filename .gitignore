@@ -5,3 +5,5 @@ raw/
 __pycache__/
 pipeline.json
 pipeline.json.tmp
+video/node_modules/
+video/out/
