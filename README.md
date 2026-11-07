@@ -41,7 +41,7 @@ What it found on November 7, 2026:
 
 ## How Claude is used
 
-- **Building it:** Claude (in Cowork, with Claude Code style tools) read the lane repo and its `DATA-SOURCES.md`, found which public layers could answer each question, wrote the fetch and scoring scripts, built the map, and checked it in a headless browser. It also caught that Santa Ana is missing from the SCAG housing-element layer, and switched the city to Anaheim.
+- **Building it:** Claude (in Cowork) read the lane repo and its `DATA-SOURCES.md`, found which public layers could answer each question, wrote the fetch and scoring scripts, built the map, and checked it in a headless browser. It also caught that Santa Ana is missing from the SCAG housing-element layer, and switched the city to Anaheim.
 - **At run time:** the tool itself is deterministic. Every check comes from a query against public data, and nothing on screen is generated text that a person has to trust. A person checks what is "unknown" and does the ground verification.
 
 ## Try it
