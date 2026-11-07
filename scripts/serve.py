@@ -38,7 +38,7 @@ Rules:
 - No personal information. Do not name or guess an owner.
 - This is screening, not a zoning, legal or financial determination. Say "confirm with the city" where it matters.
 - The email is a DRAFT for a human to edit and send. Address it to "City of {city} housing / planning staff". Use [brackets] for anything the user must fill in.
-Return the call sheet by calling the call_sheet tool."""
+Always return the call sheet by calling the call_sheet tool exactly once. Do not answer in plain text."""
 
 CALL_SHEET_TOOL = {
     "name": "call_sheet",
@@ -60,7 +60,7 @@ CALL_SHEET_TOOL = {
 
 def claude(site):
     body = {"model": MODEL, "max_tokens": 2000, "system": SYSTEM,
-            "tools": [CALL_SHEET_TOOL], "tool_choice": {"type": "tool", "name": "call_sheet"},
+            "tools": [CALL_SHEET_TOOL], "tool_choice": {"type": "auto"},
             "messages": [{"role": "user", "content": "Site JSON:\n" + json.dumps(site, indent=1)}]}
     req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=json.dumps(body).encode(),
                                  headers={"x-api-key": KEY, "anthropic-version": "2023-06-01",
