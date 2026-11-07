@@ -180,7 +180,10 @@ main { position:relative; min-width:0; }
 .m-headline { padding:var(--space-5) var(--space-6) 0; font:600 18px/26px var(--font-body); }
 .m-stats { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:var(--space-3); padding:var(--space-5) var(--space-6); }
 .m-stat { border:1px solid var(--color-hairline); border-radius:var(--radius-md); padding:var(--space-3) var(--space-4); display:flex; flex-direction:column; gap:var(--space-1); }
-.m-stat .v { font:500 32px/36px var(--font-mono); }
+.m-stat .v { font:500 32px/36px var(--font-mono); margin-top:auto; padding-top:var(--space-3); }
+.m-stat .label { min-height:32px; }
+.m-stat .counts { font-size:22px; line-height:36px; gap:var(--space-3); }
+.m-stat .counts svg { width:18px; height:18px; }
 .m-stat .v.small { font-size:20px; line-height:36px; }
 .m-stat.key { background:var(--color-paper-2); border-color:var(--color-ink); }
 .m-body { display:grid; grid-template-columns:1.15fr 1fr; gap:var(--space-6); padding:0 var(--space-6) var(--space-6); }
