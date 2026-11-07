@@ -38,6 +38,10 @@
   .verify { background:#f6f5f2; border-radius:8px; padding:10px 12px; margin-top:12px; font-size:13px; }
   .close { float:right; border:0; background:none; font-size:18px; cursor:pointer; color:var(--muted); }
   .empty { padding:20px; color:var(--muted); }
+  .checks { list-style:none; padding:0 !important; }
+  .checks li { display:flex; gap:8px; margin:6px 0 !important; }
+  .checks .st { flex:0 0 18px; height:18px; border-radius:50%; color:#fff; font-size:11px; display:flex; align-items:center; justify-content:center; margin-top:1px; }
+  .checks .pass .st{background:var(--high)} .checks .fail .st{background:#b23b3b} .checks .unknown .st{background:var(--low)}
   @media (max-width:800px){ .app{grid-template-columns:1fr; grid-template-rows:45vh 55vh} #map{height:55vh} aside{order:2} .card{width:auto; left:16px} }
 </style>
 </head>
