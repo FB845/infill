@@ -5,8 +5,8 @@ Python 3.8+ standard library only. Writes JSON into raw/ (git-ignored).
 Gentle on public servers: one request at a time with a pause, and every
 response is cached, so re-running only fetches what is missing.
 
-Usage:  python3 scripts/fetch_data.py                 (defaults to Santa Ana)
-        python3 scripts/fetch_data.py --city "Anaheim"
+Usage:  python3 scripts/fetch_data.py                 (defaults to Anaheim)
+        python3 scripts/fetch_data.py --city "Fullerton"
         python3 scripts/fetch_data.py --refresh       (re-download everything)
 """
 import argparse, json, os, re, sys, time, urllib.parse, urllib.request
@@ -109,7 +109,7 @@ def bbox(features, pad=0.002):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--city", default="Santa Ana")
+    ap.add_argument("--city", default="Anaheim")
     ap.add_argument("--refresh", action="store_true")
     a = ap.parse_args()
     slug = a.city.lower().replace(" ", "-")
