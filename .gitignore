@@ -3,3 +3,5 @@
 *.key
 raw/
 __pycache__/
+pipeline.json
+pipeline.json.tmp

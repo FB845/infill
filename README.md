@@ -36,13 +36,22 @@ What it found on November 7, 2026:
 - 36 sites look mostly open (buildings cover under 15% of the lot), 36 look built out (over 40%), and 52 are in between and need a look.
 - All 124 sites pass the flood and fire checks, and 103 are inside a high-quality transit area.
 
+It has three views:
+
+- **Map:** the ranked sites, filters for each check, and a card per site with every check and its source.
+- **Rail:** a ticket board for the acquisitions lead: To call → Called → Site visit → Surveyed → Pursuing / Dropped. Every move is logged with a reason.
+- **Ground truth:** what site visits and existing-conditions surveys (for example a 3D scan, with a link to the E57 or PDF files) actually found, compared with what the public data predicted. Misses go into an error log, and the screen's accuracy is shown as visits come in. A visit that finds the lot built out drops the site automatically.
+
+Each site card also has a **call sheet**: Claude turns the site's checks into what's known, what's unknown, questions for the city, what to look for on site, and a draft email to city housing staff (never sent).
+
 **Demo video:** uploaded on the hub
 **Live demo:** run it locally (see Try it). It is a static page, so it also works from GitHub Pages.
 
 ## How Claude is used
 
 - **Building it:** Claude (in Cowork) read the lane repo and its `DATA-SOURCES.md`, found which public layers could answer each question, wrote the fetch and scoring scripts, built the map, and checked it in a headless browser. It also caught that Santa Ana is missing from the SCAG housing-element layer, and switched the city to Anaheim.
-- **At run time:** the tool itself is deterministic. Every check comes from a query against public data, and nothing on screen is generated text that a person has to trust. A person checks what is "unknown" and does the ground verification.
+- **At run time:** the checks are deterministic. Every pass, fail or unknown comes from a query against public data. Claude is used for one thing: the **call sheet**. `scripts/serve.py` sends Claude only the facts already on the site card, with instructions to never invent an address, owner, statute, number or zoning meaning, and to say "unknown" when the data doesn't say. Claude returns what's known, what's unknown, questions for the city, things to check on site and a draft email. A person reads and edits it, and nothing is sent. With no API key set, the same call sheet is built from a plain template, so the tool still works.
+- **The loop:** the tool screens, Claude drafts, a person verifies on the ground, and the visit feeds back into the error log. The tool never decides on its own.
 
 ## Try it
 
@@ -54,7 +63,18 @@ cd infill
 open index.html            # macOS. On Windows or Linux, open index.html in a browser
 ```
 
-The repo includes the processed data (`data/sites.js`), so the map works with no accounts and no keys. To re-pull the public data and rebuild it:
+That opens the map with no server, accounts or keys. Rail and visit notes are then saved in your browser only.
+
+For the full version (call sheets with Claude, and a shared `pipeline.json` for the rail and visit log):
+
+```bash
+cp .env.example .env       # then paste your ANTHROPIC_API_KEY into .env (optional)
+python3 scripts/serve.py   # open http://localhost:8000
+```
+
+Without a key, call sheets use the plain template. `pipeline.json` and `.env` are git-ignored.
+
+The repo includes the processed data (`data/sites.js`). To re-pull the public data and rebuild it:
 
 ```bash
 python3 scripts/fetch_data.py                   # downloads and caches into raw/ (about 3 minutes, gentle on public servers)
@@ -63,7 +83,7 @@ python3 scripts/fetch_data.py --city Fullerton  # any city in the SCAG housing-e
 python3 scripts/build_sites.py --city Fullerton
 ```
 
-No API keys are used anywhere, so there is no `.env` file. Leaflet 1.9.4 is vendored in `vendor/` so the demo runs on slow Wi-Fi. Only the street basemap tiles need internet.
+The only key is the optional `ANTHROPIC_API_KEY`, read by the local server and never sent to the browser or committed. Leaflet 1.9.4 is vendored in `vendor/` so the demo runs on slow Wi-Fi. Only the street basemap tiles need internet.
 
 ## Sources and assumptions
 
@@ -95,6 +115,9 @@ Every number we made up is labelled ASSUMPTION here and in the tool.
 | Flood, fire and transit checks | Working: real data |
 | Building vs. land value check | Partly working: code is in place, but only Santa Ana publishes values for free, and Santa Ana is missing from the site layer |
 | Ranking and top 10 | Working: our weights, shown on screen |
+| Call sheet | Working with an API key (Claude); template without one |
+| Rail and site-visit / survey log | Working: saved to `pipeline.json` (with the server) or the browser. Single-user; no logins |
+| Screen accuracy and error log | Working, but only as good as the visits logged. No real visits are in the repo |
 | Ownership, willingness to sell, utilities, contamination | Not built: shown as next steps on every card |
 | Mocked data | None |
 
@@ -119,11 +142,12 @@ Every number we made up is labelled ASSUMPTION here and in the tool.
 **With one more week:**
 - Check the whole lot instead of its center.
 - Add state fire zones, slope and contamination (CalEnviroScreen).
-- Add a "verified on the ground" status that a user can set after a site visit or existing-conditions survey, so the list gets more accurate the more it's used.
+- Use the error log to re-tune the thresholds (labelled ASSUMPTION) automatically once enough visits are logged.
+- Shared rail for a whole team, with logins.
 
 ## Data and privacy
 
-This project uses only public data. It contains no personal information about real tenants, buyers or residents. It does not request owner names or mailing addresses from any source, and stores only parcel numbers, zoning, land use, building outlines and hazard zones. It does not file applications or contact any city or person. It is a prototype and a screening tool, not a zoning, legal or financial determination.
+This project uses only public data. It contains no personal information about real tenants, buyers or residents. It does not request owner names or mailing addresses from any source, and stores only parcel numbers, zoning, land use, building outlines and hazard zones. The visit-note box warns users not to type owner, tenant or other personal names. It does not file applications or contact any city or person. It is a prototype and a screening tool, not a zoning, legal or financial determination.
 
 ## License
 

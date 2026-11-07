@@ -27,9 +27,9 @@
   .pill { display:inline-block; font-size:11px; padding:1px 7px; border-radius:99px; color:#fff; margin-right:6px; }
   .pill.high{background:var(--high)} .pill.medium{background:var(--med)} .pill.low{background:var(--low)}
   #map { height:100vh; }
-  .card { position:absolute; right:16px; top:16px; width:360px; max-height:calc(100vh - 32px); overflow:auto;
+  .card { position:absolute; right:16px; top:16px; width:390px; max-height:calc(100vh - 32px); overflow:auto;
           background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px;
-          box-shadow:0 6px 24px rgba(0,0,0,.08); z-index:1000; display:none; }
+          box-shadow:0 6px 24px rgba(0,0,0,.08); z-index:1100; display:none; }
   .card h2 { font-size:16px; margin:0 0 4px; }
   .card h3 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:14px 0 6px; }
   .card ul { margin:0; padding-left:18px; }
@@ -38,6 +38,42 @@
   .verify { background:#f6f5f2; border-radius:8px; padding:10px 12px; margin-top:12px; font-size:13px; }
   .close { float:right; border:0; background:none; font-size:18px; cursor:pointer; color:var(--muted); }
   .empty { padding:20px; color:var(--muted); }
+  .tabs { display:flex; gap:4px; padding:10px 20px 0; }
+  .tabs button { border:1px solid var(--line); background:#fff; border-radius:7px 7px 0 0; padding:6px 12px; cursor:pointer; font:inherit; color:var(--muted); }
+  .tabs button.on { color:var(--ink); border-bottom-color:#fff; font-weight:600; }
+  .station { display:inline-block; font-size:11px; padding:1px 7px; border-radius:99px; border:1px solid var(--line); margin-right:6px; color:var(--muted); }
+  .station.st-to_call{border-color:#1b1b1b;color:#1b1b1b} .station.st-visit,.station.st-surveyed{border-color:#2d5fa8;color:#2d5fa8}
+  .station.st-pursuing{background:#1f7a4d;color:#fff;border-color:#1f7a4d} .station.st-dropped{text-decoration:line-through}
+  .pane { position:absolute; inset:0; background:var(--bg); overflow:auto; z-index:1001; display:none; }
+  .rail-head { padding:16px 20px; border-bottom:1px solid var(--line); background:#fff; }
+  .rail-cols { display:grid; grid-template-columns:repeat(6, minmax(150px,1fr)); gap:10px; padding:14px; min-width:940px; }
+  .col { background:#ecebe6; border-radius:8px; padding:8px; min-height:200px; }
+  .col-h { font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.05em; padding:4px 4px 8px; display:flex; justify-content:space-between; }
+  .col-h span { color:var(--muted); }
+  .ticket { background:#fff; border:1px solid var(--line); border-top:3px solid #1b1b1b; border-radius:4px; padding:8px 10px; margin-bottom:8px; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.05); font-size:13px; }
+  .ticket.on { outline:2px solid #1b1b1b; }
+  .t-top { display:flex; justify-content:space-between; align-items:center; }
+  .truth-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; padding:16px 20px; }
+  .truth-stats div { background:#fff; border:1px solid var(--line); border-radius:8px; padding:12px; }
+  .truth-stats b { display:block; font-size:24px; }
+  .truth-stats span { color:var(--muted); font-size:12px; }
+  h3.sec { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:10px 20px 6px; }
+  .truth-row { background:#fff; border:1px solid var(--line); border-left:4px solid var(--low); border-radius:6px; margin:0 20px 8px; padding:10px 12px; cursor:pointer; }
+  .truth-row.miss { border-left-color:#b23b3b; } .truth-row.match { border-left-color:var(--high); }
+  .row { display:flex; gap:8px; align-items:center; margin:10px 0; flex-wrap:wrap; }
+  .row select { font:inherit; padding:4px 6px; }
+  .btn { font:inherit; border:1px solid #1b1b1b; background:#1b1b1b; color:#fff; border-radius:7px; padding:6px 12px; cursor:pointer; }
+  .btn.ghost { background:#fff; color:#1b1b1b; }
+  .visit { display:grid; gap:8px; background:#f6f5f2; border-radius:8px; padding:12px; margin:8px 0; }
+  .visit label { display:grid; gap:3px; font-size:12px; color:var(--muted); }
+  .visit label.chk { display:flex; align-items:center; gap:6px; color:var(--ink); }
+  .visit input, .visit select, .visit textarea { font:inherit; padding:5px 7px; border:1px solid var(--line); border-radius:6px; }
+  .survey { display:grid; gap:8px; }
+  .callsheet { background:#f6f5f2; border-radius:8px; padding:12px; margin:8px 0; }
+  .callsheet h4 { margin:10px 0 4px; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  .callsheet ul { margin:0; }
+  .email { background:#fff; border:1px solid var(--line); border-radius:6px; padding:8px 10px; margin-bottom:8px; }
+  .email pre { white-space:pre-wrap; font:inherit; margin:6px 0 0; }
   .checks { list-style:none; padding:0 !important; }
   .checks li { display:flex; gap:8px; margin:6px 0 !important; }
   .checks .st { flex:0 0 18px; height:18px; border-radius:50%; color:#fff; font-size:11px; display:flex; align-items:center; justify-content:center; margin-top:1px; }
@@ -52,12 +88,15 @@
       <h1>Infill</h1>
       <p class="tag">Nonprofits find land by luck. Infill finds it on purpose.</p>
     </header>
+    <div class="tabs"><button data-view="map" class="on">Map</button><button data-view="rail">Rail</button><button data-view="truth">Ground truth</button></div>
     <div class="filters" id="filters"></div>
     <div class="count" id="count"></div>
     <div class="list" id="list"></div>
   </aside>
   <main style="position:relative">
     <div id="map"></div>
+    <div id="rail" class="pane"></div>
+    <div id="truth" class="pane"></div>
     <div class="card" id="card"></div>
   </main>
 </div>
