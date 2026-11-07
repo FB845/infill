@@ -12,13 +12,12 @@ const W = 1600, H = 900;
 fs.mkdirSync(OUT, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const CAPTIONS = [
-  "Nonprofits find land for affordable homes by luck. Anaheim lists 124 sites. Which ones are still real?",
-  "Infill checks every site against public data: still open, flood, fire, transit, and the lower-income homes the city listed. Every check shows its source.",
-  "Claude turns those facts into a call sheet and a draft email to the city, using only what the data shows.",
-  "After a site visit or a 3D scan, the team logs what's really there (demo entry shown). Every miss goes into the error log, so the screen gets better.",
-  "Same pipeline, any city: 1,117 sites across four Orange County cities so far.",
-];
+import { LINES } from "./script.mjs";
+const CAPTIONS = LINES.slice(0, 5).map((t, i) => (i === 3 ? t.replace("there.", "there (demo entry shown).") : t));
+// Scene lengths follow the voiceover if out/voice/manifest.json exists (npm run voice)
+let VOICE = [];
+try { VOICE = JSON.parse(fs.readFileSync(path.join(OUT, "voice", "manifest.json"), "utf8")).clips.map((c) => c.seconds || 0); console.log("pacing to voiceover:", VOICE.map((x) => x.toFixed(1)).join(", ")); } catch { console.log("no voiceover manifest: default pacing"); }
+const marks = [];
 
 // Back up the team's notes, record on a clean slate, then put them back.
 const backup = await (await fetch(URL + "api/pipeline")).json();
@@ -48,7 +47,9 @@ try {
         font:500 22px/1.4 "Public Sans", system-ui, sans-serif; padding:14px 22px; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.25); transition:opacity .3s; text-align:center; }
       #demo-cursor { position:fixed; z-index:10000; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; background:rgba(184,81,13,.35); border:2px solid #B8510D;
         pointer-events:none; transition:left .6s cubic-bezier(.3,.7,.2,1), top .6s cubic-bezier(.3,.7,.2,1), transform .15s; left:800px; top:450px; }
-      #demo-cursor.down { transform:scale(.7); }`;
+      #demo-cursor.down { transform:scale(.7); }
+      html, body { overflow:hidden !important; }
+      .app, #modal { transform-origin:0 0; transition:transform .9s cubic-bezier(.45,.05,.25,1); will-change:transform; }`;
     document.head.appendChild(css);
     const t = document.createElement("div"); t.id = "demo-title";
     t.innerHTML = `<h1>Infill</h1><p>Nonprofits find land by luck. Infill finds it on purpose.</p><small>Claude Impact Lab · UCI × SoCal Affordable Housing · Lane 1: Find it</small>`;
@@ -57,6 +58,9 @@ try {
     const k = document.createElement("div"); k.id = "demo-cursor"; document.body.appendChild(k);
   });
   const caption = (txt) => page.evaluate((t) => { const c = document.getElementById("demo-cap"); c.textContent = t; c.style.opacity = t ? "1" : "0"; }, txt);
+  let sceneT = 0;
+  async function scene(i) { marks[i] = (Date.now() - t0) / 1000; sceneT = Date.now(); if (i < 5) await caption(CAPTIONS[i]); }
+  async function hold(i) { const need = (VOICE[i] || 0) + 0.4, spent = (Date.now() - sceneT) / 1000; if (need > spent) await wait((need - spent) * 1000); }
   async function point(selector, { click = true, nth = 0 } = {}) {
     const el = page.locator(selector).nth(nth);
     await el.scrollIntoViewIfNeeded();
@@ -72,6 +76,26 @@ try {
     }
   }
 
+  // Camera: scale .app and the call-sheet window around a target; captions and cursor stay unscaled.
+  let cam = { s: 1, tx: 0, ty: 0 };
+  async function zoom(selector, scale = 1.4, { nth = 0, dx = 0, dy = 0 } = {}) {
+    if (!selector || scale === 1) cam = { s: 1, tx: 0, ty: 0 };
+    else {
+      const b = await page.locator(selector).nth(nth).boundingBox();
+      // back out of the current camera to page coordinates
+      const cx = (b.x + b.width / 2 - cam.tx) / cam.s + dx, cy = (b.y + b.height / 2 - cam.ty) / cam.s + dy;
+      let tx = W / 2 - scale * cx, ty = H / 2 - scale * cy;
+      tx = Math.min(0, Math.max(W - scale * W, tx)); ty = Math.min(0, Math.max(H - scale * H, ty));
+      cam = { s: scale, tx, ty };
+    }
+    await page.evaluate((c) => {
+      const t = `translate(${c.tx}px, ${c.ty}px) scale(${c.s})`;
+      document.querySelector(".app").style.transform = t;
+      document.getElementById("modal").style.transform = t;
+    }, cam);
+    await wait(1000);
+  }
+
   // Warm up the call sheet for site 01 behind the title card (Claude can take a while)
   const firstId = await page.evaluate(() => sites.slice().sort((a, b) => a.properties.rank - b.properties.rank)[0].properties.id);
   await page.evaluate(async (id) => { await callSheet(id); }, firstId);
@@ -84,44 +108,64 @@ try {
   const keepFrom = Math.max(0, introEnd - 2.5);
 
   // 1. The problem
-  await wait(400); await caption(CAPTIONS[0]); await wait(4200);
+  await wait(400); await scene(0); await wait(4200); await hold(0);
   // 2. Site card with checks and sources
-  await caption(CAPTIONS[1]);
-  await point(".list-row", { nth: 0 }); await wait(2600);
-  await page.evaluate(() => document.getElementById("card").scrollTo({ top: 360, behavior: "smooth" })); await wait(2200);
+  await scene(1);
+  await point(".list-row", { nth: 0 }); await wait(1300);
+  await zoom("#card .card-head", 1.5, { dy: 150 }); await wait(900);
+  await page.evaluate(() => document.getElementById("card").scrollTo({ top: 360, behavior: "smooth" })); await wait(2000);
+  await hold(1); await zoom(null);
   // 3. Call sheet window + Mark as called
-  await caption(CAPTIONS[2]);
+  await scene(2);
   await page.evaluate(() => document.getElementById("card").scrollTo({ top: 0 })); await wait(200);
-  await point("#callBtn"); await wait(2700);
-  await page.evaluate(() => document.getElementById("modal").scrollTo({ top: 9999, behavior: "smooth" })); await wait(1600);
-  await point("#m-called"); await wait(1300);
-  await page.keyboard.press("Escape"); await wait(500);
+  await point("#callBtn"); await wait(700);
+  await zoom(".m-stats", 1.45, { dy: -60 }); await wait(1600);
+  await zoom(".m-body", 1.3, { dy: -40 }); await wait(1200);
+  await zoom(null);
+  await page.evaluate(() => document.getElementById("modal").scrollTo({ top: 9999, behavior: "smooth" })); await wait(1000);
+  await zoom(".m-foot", 1.6, { dx: 140 });
+  await point("#m-called"); await wait(1100);
+  await zoom(null);
+  await hold(2);
+  await page.keyboard.press("Escape"); await wait(400);
   // 4. Log a 3D-scan visit on site 03, then Ground truth
-  await caption(CAPTIONS[3]);
+  await scene(3);
   await point(".list-row", { nth: 2 }); await wait(1000);
-  await point("#visitBtn"); await wait(400);
+  await point("#visitBtn"); await wait(300);
+  await zoom("#visitForm", 1.45, { dy: -40 });
   await page.selectOption("#v-found", "parking");
   await point('input[name="surveyed"]'); await wait(300);
   // Honest demo data: this visit did not happen, so the note says so on screen.
   await page.fill('#v-n', "Demo entry for this video, not a real site visit.");
-  await point('#visitForm button[type="submit"]'); await wait(900);
-  await point('.tabs button[data-view="truth"]'); await wait(2600);
+  await point('#visitForm button[type="submit"]'); await wait(700);
+  await zoom(null);
+  await page.evaluate(() => { document.getElementById("card").style.display = "none"; });
+  await point('.tabs button[data-view="truth"]'); await wait(500);
+  await zoom("#truth .stats", 1.35, { dy: 120 }); await wait(2000); await hold(3);
+  await zoom(null);
   // 5. Scale: Garden Grove, all 946 sites
-  await caption(CAPTIONS[4]);
+  await scene(4);
   await point('.tabs button[data-view="map"]'); await wait(300);
   await page.evaluate(() => { document.getElementById("card").style.display = "none"; });
   await point("#city", { click: false });
   await page.selectOption("#city", "garden-grove"); await wait(900);
-  await point('.segmented button[data-top="0"]'); await wait(3400);
+  await point('.segmented button[data-top="0"]'); await wait(900);
+  await page.evaluate(() => { document.querySelector(".app").style.transition = "transform 2.6s ease-in-out"; });
+  await zoom("#map", 1.25, { dx: 200 }); await wait(1800);
+  await page.evaluate(() => { document.querySelector(".app").style.transition = ""; });
+  await hold(4);
+  await zoom(null);
   // End card
   await caption("");
+  marks[5] = (Date.now() - t0) / 1000; sceneT = Date.now();
   await page.evaluate(() => {
+    document.getElementById("demo-cursor").style.display = "none";
     const t = document.createElement("div"); t.id = "demo-title"; t.style.opacity = "0";
     t.innerHTML = `<h1>Infill</h1><p>Screen. Draft with Claude. Verify on the ground. Learn.</p><small>github.com/FB845/infill · public data only · prototype, not a zoning determination</small>`;
     document.body.appendChild(t); requestAnimationFrame(() => (t.style.opacity = "1"));
   });
-  await wait(3000);
-  fs.writeFileSync(path.join(OUT, "timing.json"), JSON.stringify({ keepFrom, total: (Date.now() - t0) / 1000 }, null, 1));
+  await wait(1200); await hold(5); await wait(1200);
+  fs.writeFileSync(path.join(OUT, "timing.json"), JSON.stringify({ keepFrom, marks, total: (Date.now() - t0) / 1000 }, null, 1));
 } finally {
   const v = page.video();
   await ctx.close();

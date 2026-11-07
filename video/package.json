@@ -2,7 +2,12 @@
   "name": "infill-demo-recorder",
   "private": true,
   "type": "module",
-  "description": "Records the Infill walkthrough video with Playwright. Run: npm install && npx playwright install chromium && npm run record",
-  "scripts": { "record": "node record_demo.mjs" },
-  "dependencies": { "playwright": "1.48.2" }
+  "description": "Infill walkthrough: npm install && npx playwright install chromium, then npm run voice (optional) and npm run record",
+  "scripts": {
+    "voice": "node voiceover.mjs",
+    "record": "node record_demo.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.48.2"
+  }
 }
