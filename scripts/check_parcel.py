@@ -24,7 +24,8 @@ def call(url, params, tries=2):
         try:
             req = urllib.request.Request(url, data=body, headers={"User-Agent": "infill-hackathon-prototype/0.2",
                                                                   "Content-Type": "application/x-www-form-urlencoded"})
-            with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            # The county's ocgis.com server can be slow: give it longer than the others.
+            with urllib.request.urlopen(req, timeout=TIMEOUT * (2.5 if "ocgis.com" in url else 1)) as r:
                 d = json.loads(r.read().decode("utf-8"))
             sys.stderr.write(f"  [check] {name}: {time.time() - t:.1f}s\n")
             if isinstance(d, dict) and "error" in d:
