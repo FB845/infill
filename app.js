@@ -28,6 +28,7 @@ const IC = {
   fail: (c = "#FFFFFF", s = 14) => `<svg width="${s}" height="${s}" viewBox="0 0 16 16" fill="none" stroke="${c}" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>`,
   unknown: (c = "#FFFFFF", s = 14) => `<svg width="${s}" height="${s}" viewBox="0 0 16 16" fill="none" stroke="${c}" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5.6 5.8a2.4 2.4 0 1 1 3.4 2.2c-.7.3-1 .8-1 1.5v.4"/><circle cx="8" cy="13" r="0.9" fill="${c}" stroke="none"/></svg>`,
   close: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#1B1F1D" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>`,
+  star: (on, c) => `<svg width="18" height="18" viewBox="0 0 16 16" fill="${on ? (c || "#FFFFFF") : "none"}" stroke="${c || (on ? "#FFFFFF" : "#1B1F1D")}" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.6l-3.8 2 .7-4.3-3.1-3 4.3-.6z"/></svg>`,
 };
 const STATION_ICON = {
   to_call: (c) => `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="${c}" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 2.5h3l1.2 3-1.7 1.1a8 8 0 0 0 3.4 3.4l1.1-1.7 3 1.2v3a1 1 0 0 1-1 1A11.5 11.5 0 0 1 2.5 3.5a1 1 0 0 1 1-1z"/></svg>`,
@@ -219,12 +220,14 @@ function drawMap(ss, sp) {
   }
 }
 
+const defaultStation = (id) => (byId[id] ? (byId[id].properties.top ? "to_call" : "screened") : (state[id]?.station || "screened"));
+const isSaved = (id) => !!state[id]?.saved;
 function rowHTML(f) {
-  const p = f.properties, st = peekStation(p.id);
+  const p = f.properties, st = peekStation(p.id), moved = st !== defaultStation(p.id);
   return `<button type="button" class="list-row ${p.id === selectedId ? "on" : ""}" data-id="${p.id}">
     <span class="plate ${p.kind === "surplus" ? "surplus" : ""}">${plateText(p)}</span>
     <span class="lr-main">
-      <span class="lr-top"><span class="lr-apn">${esc(p.apn || p.label)}</span>${pill(p.confidence, true, { high: "High", medium: "Med", low: "Low" }[p.confidence])}${st !== "screened" ? tag(st, true) : ""}</span>
+      <span class="lr-top"><span class="lr-apn">${esc(p.apn || p.label)}</span>${pill(p.confidence, true, { high: "High", medium: "Med", low: "Low" }[p.confidence])}${moved ? tag(st, true) : ""}${isSaved(p.id) ? `<span class="saved-mark" aria-label="Saved">${IC.star(true, "#1B1F1D")}</span>` : ""}</span>
       <span class="lr-sum">${esc(p.summary)}</span>
     </span>
     <span class="lr-side">${counts(p)}<span class="meta">${p.acres != null ? p.acres + " ac" : "? ac"}</span></span>
@@ -309,8 +312,10 @@ function renderAll() {
   renderList();
   document.getElementById("rail").style.display = view === "rail" ? "block" : "none";
   document.getElementById("truth").style.display = view === "truth" ? "block" : "none";
+  document.getElementById("saved").style.display = view === "saved" ? "block" : "none";
   if (view === "rail") renderRail();
   if (view === "truth") renderTruth();
+  if (view === "saved") renderSaved();
   document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === view)));
   if (selectedId && byId[selectedId] && document.getElementById("card").style.display === "block") renderCard(selectedId);
 }
@@ -357,15 +362,15 @@ function renderCard(id) {
   card.innerHTML = `
     <div class="card-head"><span class="plate ${p.kind === "surplus" ? "surplus" : ""}">${plateText(p)}</span>
       <div><h2>${esc(p.kind === "surplus" ? p.label : (p.apn ? "APN " + p.apn : p.label))}</h2><div class="meta">${p.kind === "surplus" ? "Surplus public land notice" : "Housing-element site"} · ${facts}</div></div>
-      <button type="button" class="icon-btn" id="closeCard" aria-label="Close site card">${IC.close}</button></div>
+      <button type="button" class="star-btn" id="saveCard" aria-pressed="${isSaved(id)}" aria-label="${isSaved(id) ? "Remove from saved" : "Save site"}">${IC.star(isSaved(id))}</button>
+      <button type="button" class="icon-btn" id="closeCard" aria-label="Close site card" style="margin-left:0">${IC.close}</button></div>
     <div class="card-tags">${pill(p.confidence)}${tag(s.station)}<span class="gridref">${gridRef(byId[id])}</span></div>
     <p>${esc(p.summary)}</p>
     ${extra ? `<div class="meta" style="margin-bottom:8px">${extra}</div>` : ""}
-    <div class="actions"><button type="button" id="callBtn" class="btn btn-primary">Call sheet${claudeOn ? " · Claude" : ""}</button>
+    <div class="actions"><button type="button" id="callBtn" class="btn btn-primary">Open call sheet${claudeOn ? " · Claude" : ""}</button>
       <button type="button" id="visitBtn" class="btn btn-ghost">Log site visit / survey</button></div>
     <div class="station-row"><label class="label" for="station">Station</label>
       <select class="select" id="station">${STATIONS.map(([k, nm]) => `<option value="${k}" ${k === s.station ? "selected" : ""}>${nm}</option>`).join("")}</select></div>
-    <div id="callOut"></div>
     <form id="visitForm" class="visit-form">
       <div class="field"><label class="label" for="v-date">Date</label><input class="input" id="v-date" type="date" name="date" required value="${new Date().toISOString().slice(0, 10)}"></div>
       <div class="field"><label class="label" for="v-found">What is actually on the lot</label><select class="select" id="v-found" name="found">${FOUND.map(([k, nm]) => `<option value="${k}">${nm}</option>`).join("")}</select></div>
@@ -398,8 +403,8 @@ function renderCard(id) {
     else setStation(id, v.survey ? "surveyed" : (["to_call", "called", "screened"].includes(s.station) ? "visit" : s.station), v.survey ? "existing-conditions survey logged" : "site visit logged");
     saveState(); renderAll();
   };
-  card.querySelector("#callBtn").onclick = () => callSheet(id);
-  if (callCache[id]) showCall(id, callCache[id]);
+  card.querySelector("#callBtn").onclick = () => openModal(id);
+  card.querySelector("#saveCard").onclick = () => toggleSave(id);
 }
 
 // ---------- call sheet ----------
@@ -427,8 +432,7 @@ function templateSheet(p) {
     model: "template (no Claude key set)" };
 }
 async function callSheet(id) {
-  const p = byId[id].properties, out = document.getElementById("callOut");
-  out.innerHTML = `<div class="callsheet meta">${claudeOn ? "Claude is writing the call sheet from this site's checks…" : "Building the call sheet…"}</div>`;
+  const p = byId[id].properties;
   let sheet;
   if (claudeOn) {
     try {
@@ -439,20 +443,147 @@ async function callSheet(id) {
     } catch (e) { sheet = templateSheet(p); sheet.model = `template (Claude call failed: ${e.message})`; }
   } else sheet = templateSheet(p);
   callCache[id] = sheet;
-  if (selectedId === id) showCall(id, sheet);
+  if (modalId === id) renderModal(id);
 }
-function showCall(id, c) {
+// ---------- call sheet window ----------
+let modalId = null;
+const modalEl = document.getElementById("modal");
+function openModal(id) {
+  modalId = id; modalEl.hidden = false; document.body.style.overflow = "hidden";
+  renderModal(id);
+  if (!callCache[id]) callSheet(id);
+  setTimeout(() => modalEl.querySelector("#m-close")?.focus(), 0);
+}
+function closeModal() { modalId = null; modalEl.hidden = true; modalEl.innerHTML = ""; document.body.style.overflow = ""; }
+modalEl.addEventListener("click", (e) => { if (e.target === modalEl) closeModal(); });
+document.addEventListener("keydown", (e) => { if (modalId && e.key === "Escape") closeModal(); });
+
+function renderModal(id) {
+  const f = byId[id], p = f.properties, s = siteState(id), c = callCache[id];
+  const n = { pass: 0, fail: 0, unknown: 0 }; (p.checks || []).forEach((x) => n[x.status]++);
   const li = (xs) => (xs || []).map((x) => `<li>${esc(x)}</li>`).join("");
-  const out = document.getElementById("callOut");
-  if (!out) return;
-  out.innerHTML = `<div class="callsheet">
-    <div class="meta">Call sheet · ${esc(c.model)} · uses only the facts on this card. Check before you rely on it.</div>
-    <p style="margin:8px 0 0"><b>${esc(c.headline)}</b></p>
-    <span class="label">Known</span><ul>${li(c.known)}</ul><span class="label">Unknown</span><ul>${li(c.unknown)}</ul>
-    <span class="label">Ask the city</span><ul>${li(c.ask_city)}</ul><span class="label">Look for on site</span><ul>${li(c.ask_on_site)}</ul>
-    <span class="label">Draft email · not sent</span><div class="email"><b>${esc(c.email_subject)}</b><pre>${esc(c.email_body)}</pre></div>
-    <button type="button" class="btn btn-ghost" id="copyEmail">Copy email</button></div>`;
-  document.getElementById("copyEmail").onclick = () => navigator.clipboard?.writeText(`${c.email_subject}\n\n${c.email_body}`);
+  const sk = '<div class="skeleton"></div><div class="skeleton" style="width:80%"></div><div class="skeleton" style="width:60%"></div>';
+  const ref = p.kind === "surplus" ? p.label : (p.apn ? "APN " + p.apn : p.label);
+  const known = (p.checks || []).map((x) => `<li><span class="tile ${x.status}">${IC[x.status]("#FFFFFF", 12)}</span><span><b>${esc(x.test)}</b>: ${esc(x.detail)}<br><span class="src">${x.url ? `<a href="${x.url}" target="_blank" rel="noopener">${esc(x.source)} ↗</a>` : esc(x.source)}</span></span></li>`).join("");
+  const unknownList = c ? (c.unknown || []).map((x) => `<li><span class="tile">${IC.unknown("#FFFFFF", 12)}</span><span>${esc(x)}</span></li>`).join("") : sk;
+  const keyNum = p.kind === "surplus" ? { label: "Status", v: p.active ? "Active" : "Archived", small: true }
+                                      : { label: "Lower-income homes listed", v: String(p.low_income_capacity ?? "?") };
+  modalEl.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-title">
+    <div class="m-head">
+      <span class="plate ${p.kind === "surplus" ? "surplus" : ""}">${plateText(p)}</span>
+      <div><h2 id="m-title">${esc(ref)}</h2>
+        <div class="meta">Call sheet · ${p.kind === "surplus" ? "Surplus public land notice" : "Housing-element site"} · ${esc(p.city)} · ${gridRef(f)}</div>
+        <div class="card-tags" style="margin:10px 0 0">${pill(p.confidence)}${tag(s.station)}</div></div>
+      <div class="m-head-actions no-print">
+        <button type="button" class="star-btn" id="m-save" aria-pressed="${isSaved(id)}" aria-label="${isSaved(id) ? "Remove from saved" : "Save site"}">${IC.star(isSaved(id))}</button>
+        <button type="button" class="icon-btn" id="m-close" aria-label="Close call sheet" style="margin:0">${IC.close}</button>
+      </div>
+    </div>
+    <div class="m-headline">${c ? esc(c.headline) : esc(p.summary)}</div>
+    <div class="m-stats">
+      <div class="m-stat key"><span class="label">${keyNum.label}</span><span class="v ${keyNum.small ? "small" : ""}">${esc(keyNum.v)}</span>${p.total_capacity != null ? `<span class="meta">of ${p.total_capacity} total listed</span>` : ""}</div>
+      <div class="m-stat"><span class="label">Lot size</span><span class="v">${p.acres != null ? p.acres : "?"}</span><span class="meta">acres</span></div>
+      <div class="m-stat"><span class="label">Checks</span><span class="v small">${counts(p)}</span><span class="meta">pass · fail · unknown</span></div>
+      <div class="m-stat"><span class="label">Zoning</span><span class="v small">${esc((p.zoning || "?").slice(0, 18))}</span><span class="meta">${p.landuse_code ? "SCAG land use " + esc(p.landuse_code) : (p.existing_use ? esc(p.existing_use.slice(0, 40)) : "&nbsp;")}</span></div>
+    </div>
+    <div class="m-body">
+      <div>
+        <div class="m-sec"><h3>Ask the city</h3>${c ? `<ol class="qlist">${li(c.ask_city)}</ol>` : sk}</div>
+        <div class="m-sec"><h3>Still unknown</h3><ul class="ulist">${unknownList}</ul></div>
+        <div class="m-sec"><h3>Look for on site</h3>${c ? `<ol class="qlist">${li(c.ask_on_site)}</ol>` : sk}</div>
+      </div>
+      <div>
+        <div class="m-sec"><h3>What the data shows <span class="meta">pulled ${esc(meta.pulled || "?")}</span></h3><ul class="ulist">${known}</ul></div>
+        <div class="m-sec"><h3>Draft email · not sent</h3>${c ? `<div class="m-email"><b>${esc(c.email_subject)}</b><pre>${esc(c.email_body)}</pre>
+          <button type="button" class="btn btn-ghost btn-sm no-print" id="m-copy">Copy email</button></div>` : sk}</div>
+      </div>
+    </div>
+    <div class="m-note meta">${c ? `Written by ${esc(c.model)} from the facts above only. Check before you rely on it.` : (claudeOn ? "Claude is writing the call sheet from this site's checks…" : "Building the call sheet…")} Prototype: screening only, not a zoning or legal determination.</div>
+    <div class="m-foot no-print">
+      <button type="button" class="btn btn-primary" id="m-called">${s.station === "called" ? "Marked as called ✓" : "Mark as called"}</button>
+      <button type="button" class="btn btn-ghost" id="m-visit">Log site visit</button>
+      <span class="spacer"></span>
+      <a class="btn btn-ghost" href="${mapsLink(f)}" target="_blank" rel="noopener" style="text-decoration:none">Open in Maps ↗</a>
+      <button type="button" class="btn btn-ghost" id="m-csv">Export CSV</button>
+      <button type="button" class="btn btn-ghost" id="m-print">Print / PDF</button>
+    </div>
+  </div>`;
+  modalEl.querySelector("#m-close").onclick = closeModal;
+  modalEl.querySelector("#m-save").onclick = () => { toggleSave(id); renderModal(id); };
+  modalEl.querySelector("#m-called").onclick = () => { setStation(id, "called", "marked as called from call sheet"); renderModal(id); };
+  modalEl.querySelector("#m-visit").onclick = () => { closeModal(); select(id); document.getElementById("visitForm")?.classList.add("open"); };
+  modalEl.querySelector("#m-csv").onclick = () => downloadCSV([siteRecord(id)], `infill-${(p.apn || p.id).replace(/[^\w-]/g, "")}.csv`);
+  modalEl.querySelector("#m-print").onclick = () => printAs("print-modal");
+  const cp = modalEl.querySelector("#m-copy");
+  if (cp) cp.onclick = () => { navigator.clipboard?.writeText(`${c.email_subject}\n\n${c.email_body}`); cp.textContent = "Copied ✓"; };
+}
+
+// ---------- save, export ----------
+function centerOf(f) {
+  if (f.geometry.type === "Point") return { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] };
+  const c = L.geoJSON(f).getBounds().getCenter(); return { lat: c.lat, lng: c.lng };
+}
+const mapsLink = (f) => { const c = centerOf(f); return `https://www.google.com/maps/search/?api=1&query=${c.lat.toFixed(6)},${c.lng.toFixed(6)}`; };
+function snapshot(id) {
+  const f = byId[id], p = f.properties, c = centerOf(f);
+  return { city_slug: city, city: p.city, kind: p.kind || "housing_element", rank: p.rank ?? null, apn: p.apn, label: p.label,
+           acres: p.acres, lower_income_capacity: p.low_income_capacity ?? null, total_capacity: p.total_capacity ?? null,
+           zoning: p.zoning, confidence: p.confidence, summary: p.summary, lat: +c.lat.toFixed(6), lng: +c.lng.toFixed(6),
+           checks: (p.checks || []).map((x) => `${x.test}: ${x.status}`).join("; "), data_pulled: meta.pulled };
+}
+function toggleSave(id) {
+  const s = siteState(id);
+  if (s.saved) { s.saved = false; delete s.snapshot; s.log.push({ at: new Date().toISOString(), why: "removed from saved" }); }
+  else { s.saved = true; s.saved_at = new Date().toISOString(); s.snapshot = snapshot(id); }
+  saveState(); renderAll();
+}
+function siteRecord(id) {
+  const snap = byId[id] ? snapshot(id) : state[id]?.snapshot || {};
+  const s = state[id] || {};
+  const last = s.visits?.[s.visits.length - 1];
+  return { ...snap, id, station: stationName(s.station || defaultStation(id)), saved: s.saved ? "yes" : "no",
+           last_visit: last ? `${last.date} ${(FOUND.find((x) => x[0] === last.found) || [])[1] || ""}${last.survey ? " (" + last.survey.method + ")" : ""}` : "",
+           maps_link: `https://www.google.com/maps/search/?api=1&query=${snap.lat},${snap.lng}` };
+}
+function downloadCSV(rows, name) {
+  if (!rows.length) return;
+  const cols = ["id", "city", "kind", "rank", "apn", "label", "acres", "lower_income_capacity", "total_capacity", "zoning", "confidence", "station", "saved", "last_visit", "summary", "checks", "lat", "lng", "maps_link", "data_pulled"];
+  const q = (v) => { const t = String(v ?? ""); return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+  const csv = [cols.join(","), ...rows.map((r) => cols.map((k) => q(r[k])).join(","))].join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function printAs(cls) { document.body.classList.add(cls); window.print(); setTimeout(() => document.body.classList.remove(cls), 500); }
+
+// ---------- saved sites ----------
+async function openSaved(id, slug) {
+  if (slug && slug !== city) { citySel.value = slug; await useCity(slug); }
+  view = "map"; renderAll(); setTimeout(() => map.invalidateSize(), 50);
+  if (byId[id]) select(id, true);
+}
+function renderSaved() {
+  const el = document.getElementById("saved");
+  const items = Object.entries(state).filter(([, s]) => s.saved && s.snapshot).map(([id, s]) => ({ id, s, snap: s.snapshot }))
+    .sort((a, b) => (b.s.saved_at || "").localeCompare(a.s.saved_at || ""));
+  const byCity = {};
+  items.forEach((x) => (byCity[x.snap.city] ||= []).push(x));
+  el.innerHTML = `<div class="pane-head"><h2>Saved sites · ${items.length}</h2>
+      <div class="actions no-print" style="margin:0"><button type="button" class="btn btn-ghost btn-sm" id="sv-csv" ${items.length ? "" : "disabled"}>Export all (CSV)</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="sv-print" ${items.length ? "" : "disabled"}>Print / PDF</button></div></div>
+    <div class="saved-wrap">${items.length ? Object.entries(byCity).map(([cname, xs]) => `<span class="label" style="margin-top:8px">${esc(cname)} · ${xs.length}</span>` + xs.map(({ id, s, snap }) => `
+      <div class="saved-row"><div>
+        <div class="lr-top"><span class="mono" style="color:var(--color-muted)">${snap.kind === "surplus" ? "SL" : String(snap.rank ?? "").padStart(2, "0")}</span><span class="lr-apn">${esc(snap.apn || snap.label)}</span>${pill(snap.confidence, true, { high: "High", medium: "Med", low: "Low" }[snap.confidence])}${tag(s.station || "screened", true)}</div>
+        <div style="margin-top:4px">${esc(snap.summary)}</div>
+        <div class="meta">${snap.acres != null ? snap.acres + " ac · " : ""}${snap.lat}, ${snap.lng} · saved ${esc((s.saved_at || "").slice(0, 10))}</div></div>
+        <div class="acts no-print"><button type="button" class="btn btn-primary btn-sm" data-open="${id}" data-city="${snap.city_slug}">Open</button>
+          <a class="btn btn-ghost btn-sm" style="text-decoration:none" href="https://www.google.com/maps/search/?api=1&query=${snap.lat},${snap.lng}" target="_blank" rel="noopener">Maps ↗</a>
+          <button type="button" class="btn btn-ghost btn-sm" data-unsave="${id}">Remove</button></div>
+      </div>`).join("")).join("") : '<div class="empty">No saved sites yet. Use the star on a site card or call sheet.</div>'}</div>`;
+  el.querySelectorAll("[data-open]").forEach((b) => (b.onclick = () => openSaved(b.dataset.open, b.dataset.city)));
+  el.querySelectorAll("[data-unsave]").forEach((b) => (b.onclick = () => { const s = state[b.dataset.unsave]; s.saved = false; delete s.snapshot; saveState(); renderAll(); }));
+  const csvB = el.querySelector("#sv-csv"); if (csvB) csvB.onclick = () => downloadCSV(items.map((x) => siteRecord(x.id)), "infill-saved-sites.csv");
+  const prB = el.querySelector("#sv-print"); if (prB) prB.onclick = () => printAs("print-saved");
 }
 
 // ---------- start ----------

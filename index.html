@@ -44,7 +44,8 @@ header.brand { padding:var(--space-5) var(--space-5) var(--space-4); border-bott
 .select, .input, .textarea { font:var(--text-body); color:var(--color-ink); background:var(--color-panel); border:1px solid var(--color-border); border-radius:var(--radius-sm); min-height:var(--control-h); padding:0 var(--space-3); width:100%; }
 .textarea { padding:var(--space-2) var(--space-3); min-height:72px; resize:vertical; }
 .tabs { display:flex; gap:0; border:1px solid var(--color-border); border-radius:var(--radius-md); overflow:hidden; }
-.tabs button, .segmented button { flex:1; height:40px; border:0; background:var(--color-panel); color:var(--color-ink); font:700 14px/1 var(--font-display); cursor:pointer; }
+.tabs button, .segmented button { flex:1; height:40px; border:0; background:var(--color-panel); color:var(--color-ink); font:700 14px/1 var(--font-display); cursor:pointer; white-space:nowrap; }
+.tabs button { font-size:13px; padding:0 6px; }
 .tabs button + button, .segmented button + button { border-left:1px solid var(--color-border); }
 .tabs button[aria-pressed=true] { background:var(--color-ink); color:#fff; }
 .segmented { display:inline-flex; border:1px solid var(--color-border); border-radius:var(--radius-md); overflow:hidden; }
@@ -167,6 +168,59 @@ main { position:relative; min-width:0; }
 .truth-row .tile { width:22px; height:22px; border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; }
 .truth-row.match .tile { background:var(--color-pass); } .truth-row.miss .tile { background:var(--color-fail); } .truth-row.new .tile { background:var(--color-unknown); }
 .empty { padding:var(--space-5); color:var(--color-muted); }
+/* Call sheet window */
+.modal-wrap { position:fixed; inset:0; z-index:3000; background:rgba(27,31,29,.45); display:flex; align-items:flex-start; justify-content:center; padding:4vh var(--space-4); overflow:auto; }
+.modal-wrap[hidden] { display:none; }
+.modal { width:min(980px, 100%); background:var(--color-panel); border-radius:var(--radius-lg); box-shadow:var(--shadow-float); }
+.m-head { display:flex; gap:var(--space-4); align-items:flex-start; padding:var(--space-6) var(--space-6) var(--space-4); border-bottom:2px solid var(--color-ink); }
+.m-head .plate { width:52px; height:34px; font-size:16px; flex:none; }
+.m-head h2 { margin:0; font:800 26px/32px var(--font-display); letter-spacing:-.01em; }
+.m-head .meta { margin-top:4px; }
+.m-head-actions { margin-left:auto; display:flex; gap:var(--space-2); align-items:center; }
+.m-headline { padding:var(--space-5) var(--space-6) 0; font:600 18px/26px var(--font-body); }
+.m-stats { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:var(--space-3); padding:var(--space-5) var(--space-6); }
+.m-stat { border:1px solid var(--color-hairline); border-radius:var(--radius-md); padding:var(--space-3) var(--space-4); display:flex; flex-direction:column; gap:var(--space-1); }
+.m-stat .v { font:500 32px/36px var(--font-mono); }
+.m-stat .v.small { font-size:20px; line-height:36px; }
+.m-stat.key { background:var(--color-paper-2); border-color:var(--color-ink); }
+.m-body { display:grid; grid-template-columns:1.15fr 1fr; gap:var(--space-6); padding:0 var(--space-6) var(--space-6); }
+.m-sec { margin-top:var(--space-5); }
+.m-sec:first-child { margin-top:0; }
+.m-sec h3 { margin:0 0 var(--space-2); font:var(--text-label); letter-spacing:var(--tracking-label); text-transform:uppercase; color:var(--color-muted); display:flex; justify-content:space-between; }
+.qlist { margin:0; padding:0; list-style:none; counter-reset:q; }
+.qlist li { counter-increment:q; display:grid; grid-template-columns:28px 1fr; gap:var(--space-2); padding:var(--space-2) 0; border-top:1px solid var(--color-hairline); font-size:15px; line-height:22px; }
+.qlist li::before { content:counter(q, decimal-leading-zero); font:600 13px/22px var(--font-mono); color:var(--color-accent-strong); }
+.ulist { margin:0; padding:0; list-style:none; }
+.ulist li { display:grid; grid-template-columns:22px 1fr; gap:var(--space-2); padding:var(--space-2) 0; border-top:1px solid var(--color-hairline); font-size:14px; line-height:20px; }
+.ulist .tile { width:20px; height:20px; border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; background:var(--color-unknown); margin-top:1px; }
+.ulist .tile.pass { background:var(--color-pass); } .ulist .tile.fail { background:var(--color-fail); }
+.ulist .src { font:12px/17px var(--font-mono); color:var(--color-muted); }
+.m-email { background:var(--color-paper); border:1px solid var(--color-hairline); border-radius:var(--radius-md); padding:var(--space-4); }
+.m-email pre { white-space:pre-wrap; font:var(--text-body); margin:var(--space-2) 0 var(--space-3); }
+.m-foot { display:flex; gap:var(--space-2); flex-wrap:wrap; align-items:center; padding:var(--space-4) var(--space-6); border-top:1px solid var(--color-hairline); background:var(--color-paper); border-radius:0 0 var(--radius-lg) var(--radius-lg); }
+.m-foot .spacer { flex:1; }
+.m-note { padding:0 var(--space-6) var(--space-4); }
+.skeleton { height:14px; border-radius:var(--radius-sm); background:linear-gradient(90deg, var(--color-paper-2), var(--color-hairline), var(--color-paper-2)); background-size:200% 100%; animation:sk 1.2s linear infinite; margin:10px 0; }
+@keyframes sk { to { background-position:-200% 0; } }
+.star-btn { width:44px; height:44px; border-radius:var(--radius-md); border:1px solid var(--color-border); background:var(--color-panel); display:inline-flex; align-items:center; justify-content:center; cursor:pointer; flex:none; }
+.star-btn[aria-pressed=true] { background:var(--color-ink); border-color:var(--color-ink); }
+.star-btn:hover { border-color:var(--color-ink); }
+.saved-mark { display:inline-flex; align-items:center; }
+.saved-wrap { padding:var(--space-6); display:flex; flex-direction:column; gap:var(--space-2); }
+.saved-row { display:grid; grid-template-columns:1fr auto; gap:var(--space-4); align-items:center; background:var(--color-panel); border:1px solid var(--color-hairline); border-radius:var(--radius-md); padding:var(--space-3) var(--space-4); }
+.saved-row .acts { display:flex; gap:var(--space-2); flex-wrap:wrap; }
+.btn-sm { min-height:36px; padding:0 var(--space-3); font-size:13px; }
+@media (max-width:860px) { .m-stats { grid-template-columns:repeat(2,1fr); } .m-body { grid-template-columns:1fr; } }
+@media print {
+  body.print-modal .app { display:none !important; }
+  body.print-modal .modal-wrap { position:static; background:none; padding:0; display:block; }
+  body.print-modal .modal { box-shadow:none; width:100%; }
+  body.print-saved .app aside, body.print-saved #map, body.print-saved .leaflet-container { display:none !important; }
+  body.print-saved .app { display:block; height:auto; }
+  body.print-saved #saved { position:static; display:block !important; background:none; }
+  .no-print { display:none !important; }
+  a { color:inherit; text-decoration:none; }
+}
 @media (max-width:860px) { .app { grid-template-columns:1fr; grid-template-rows:auto 60vh; } aside { order:2; } #map { height:60vh; } .card { left:var(--space-4); width:auto; } .stats { grid-template-columns:repeat(2,1fr); } }
 </style>
 </head>
@@ -185,6 +239,7 @@ main { position:relative; min-width:0; }
         <button type="button" data-view="map" aria-pressed="true">Map</button>
         <button type="button" data-view="rail" aria-pressed="false">Rail</button>
         <button type="button" data-view="truth" aria-pressed="false">Ground truth</button>
+        <button type="button" data-view="saved" aria-pressed="false">Saved</button>
       </div>
       <div class="field">
         <label class="label" for="city">City</label>
@@ -211,9 +266,11 @@ main { position:relative; min-width:0; }
     <div id="map"></div>
     <div id="rail" class="pane"></div>
     <div id="truth" class="pane"></div>
+    <div id="saved" class="pane"></div>
     <div class="card" id="card" role="dialog" aria-label="Site details"></div>
   </main>
 </div>
+<div id="modal" class="modal-wrap" hidden></div>
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="data/cities.js"></script>
 <script src="app.js"></script>

@@ -40,13 +40,15 @@ Across the four cities: 1,117 housing-element sites and 22 surplus notices. In A
 - 36 sites look mostly open (buildings cover under 15% of the lot), 36 look built out (over 40%), and 52 are in between and need a look.
 - All 124 sites pass the flood and fire checks, and 103 are inside a high-quality transit area.
 
-It has three views:
+It has four views:
 
 - **Map:** the ranked sites, filters for each check, and a card per site with every check and its source.
 - **Rail:** a ticket board for the acquisitions lead: To call → Called → Site visit → Surveyed → Pursuing / Dropped. Every move is logged with a reason.
 - **Ground truth:** what site visits and existing-conditions surveys (for example a 3D scan, with a link to the E57 or PDF files) actually found, compared with what the public data predicted. Misses go into an error log, and the screen's accuracy is shown as visits come in. A visit that finds the lot built out drops the site automatically.
 
-Each site card also has a **call sheet**: Claude turns the site's checks into what's known, what's unknown, questions for the city, what to look for on site, and a draft email to city housing staff (never sent).
+- **Saved:** sites starred from any city, with their location, an "Open in Maps" link, CSV export and print.
+
+Each site card opens a **call sheet** window that leads with what matters for the call (lower-income homes listed, lot size, check results, zoning), then what to ask the city, what's still unknown, what the data shows with sources, and a draft email. From there the user can mark the site as called, log a visit, save it, export it as CSV, or print it to PDF. The call sheet itself: Claude turns the site's checks into what's known, what's unknown, questions for the city, what to look for on site, and a draft email to city housing staff (never sent).
 
 **Demo video:** uploaded on the hub
 **Live demo:** run it locally (see Try it). It is a static page, so it also works from GitHub Pages.
