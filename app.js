@@ -361,7 +361,7 @@ function renderCard(id) {
   const card = document.getElementById("card");
   card.innerHTML = `
     <div class="card-head"><span class="plate ${p.kind === "surplus" ? "surplus" : ""}">${plateText(p)}</span>
-      <div><h2>${esc(p.kind === "surplus" ? p.label : (p.apn ? "APN " + p.apn : p.label))}</h2><div class="meta">${p.kind === "surplus" ? "Surplus public land notice" : "Housing-element site"} · ${facts}</div></div>
+      <div><h2>${esc(p.kind === "surplus" ? p.label : (p.apn ? "APN " + p.apn : p.label))}</h2><div class="meta">${p.kind === "surplus" ? "Surplus public land notice" : "Housing-element site"}</div><div class="meta" style="white-space:nowrap">${facts}</div></div>
       <button type="button" class="star-btn" id="saveCard" aria-pressed="${isSaved(id)}" aria-label="${isSaved(id) ? "Remove from saved" : "Save site"}">${IC.star(isSaved(id))}</button>
       <button type="button" class="icon-btn" id="closeCard" aria-label="Close site card" style="margin-left:0">${IC.close}</button></div>
     <div class="card-tags">${pill(p.confidence)}${tag(s.station)}<span class="gridref">${gridRef(byId[id])}</span></div>
