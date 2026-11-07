@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
-"""Download and cache the public data Infill needs for one city.
+"""Download and cache the public data Infill needs for one OC city.
 
 Python 3.8+ standard library only. Writes JSON into raw/ (git-ignored).
 Gentle on public servers: one request at a time with a pause, and every
 response is cached, so re-running only fetches what is missing.
 
-Usage:  python3 scripts/fetch_data.py            (defaults to Santa Ana)
-        python3 scripts/fetch_data.py --city "Santa Ana" --refresh
+Usage:  python3 scripts/fetch_data.py                 (defaults to Santa Ana)
+        python3 scripts/fetch_data.py --city "Anaheim"
+        python3 scripts/fetch_data.py --refresh       (re-download everything)
 """
 import argparse, json, os, re, sys, time, urllib.parse, urllib.request
 
-RAW = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "raw")
-PAUSE = 0.25  # seconds between requests
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+RAW = os.path.join(ROOT, "raw")
+PAUSE = 0.2  # seconds between requests
 
-SRC = {
-    "he_sites":   "https://maps.scag.ca.gov/scaggis/rest/services/LDX/HousingElementSite_poly_scag/MapServer",
-    "zoning":     "https://maps.scag.ca.gov/scaggis/rest/services/LDX/Zoning_poly_OR/MapServer",
-    "landuse":    "https://maps.scag.ca.gov/scaggis/rest/services/LDX/Existinglanduse_poly_OR/MapServer",
+LAYERS = {
+    "he_sites":   "https://maps.scag.ca.gov/scaggis/rest/services/LDX/HousingElementSite_poly_scag/MapServer/0",
+    "zoning":     "https://maps.scag.ca.gov/scaggis/rest/services/LDX/Zoning_poly_OR/MapServer/0",
+    "landuse":    "https://maps.scag.ca.gov/scaggis/rest/services/LDX/Existinglanduse_poly_OR/MapServer/0",
     "footprints": "https://www.ocgis.com/arcpub/rest/services/Map_Layers/Building_Footprints/MapServer/0",
     "sa_parcels": "https://gis.santa-ana.org/server/rest/services/Public/GIS_AssessorParcels/MapServer/0",
     "flood":      "https://www.ocgis.com/arcpub/rest/services/Map_Layers/Floodplains/MapServer/0",
@@ -24,23 +26,28 @@ SRC = {
     "hqta":       "https://caltrans-gis.dot.ca.gov/arcgis/rest/services/CHrailroad/CA_HQ_Transit_Areas/FeatureServer/0",
 }
 
-def get(url, params=None, tries=3):
-    if params:
-        url = url + "?" + urllib.parse.urlencode(params)
+def log(*a):
+    print(*a, file=sys.stderr, flush=True)
+
+def call(url, params, tries=3):
+    """POST a query (avoids URL-length limits). Retries slow servers."""
+    body = urllib.parse.urlencode(params).encode()
     last = None
     for i in range(tries):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "infill-hackathon-prototype/0.1"})
-            with urllib.request.urlopen(req, timeout=60) as r:
+            req = urllib.request.Request(url, data=body, headers={
+                "User-Agent": "infill-hackathon-prototype/0.2",
+                "Content-Type": "application/x-www-form-urlencoded"})
+            with urllib.request.urlopen(req, timeout=90) as r:
                 data = json.loads(r.read().decode("utf-8"))
             time.sleep(PAUSE)
             if isinstance(data, dict) and "error" in data:
                 raise RuntimeError(json.dumps(data["error"])[:300])
             return data
-        except Exception as e:  # retry slow servers (FEMA/SCAG can time out on first call)
+        except Exception as e:
             last = e
             time.sleep(2 * (i + 1))
-    raise RuntimeError(f"GET failed: {url[:160]} :: {last}")
+    raise RuntimeError(f"{url[:120]} :: {last}")
 
 def cached(name, fn, refresh=False):
     path = os.path.join(RAW, name)
@@ -53,54 +60,52 @@ def cached(name, fn, refresh=False):
         json.dump(data, f)
     return data
 
-def layer_url(base):
-    """MapServer root -> first feature layer URL; layer URL -> itself."""
-    if re.search(r"/(MapServer|FeatureServer)/\d+$", base):
-        return base
-    info = get(base, {"f": "json"})
-    layers = [l for l in info.get("layers", []) if not l.get("subLayerIds")]
-    return f"{base}/{layers[0]['id']}"
-
-def fields(meta):
-    return [f["name"] for f in meta.get("fields", [])]
-
-def pick(names, *patterns):
-    for p in patterns:
-        for n in names:
-            if re.search(p, n, re.I):
-                return n
-    return None
-
-def query_all(url, where, out_fields="*", geometry=True, page=None):
+def query_pages(url, base_params, page=1000):
     feats, offset = [], 0
-    meta = get(url, {"f": "json"})
-    page = page or int(meta.get("maxRecordCount") or 1000)
     while True:
-        d = get(url + "/query", {
-            "where": where, "outFields": out_fields, "returnGeometry": str(geometry).lower(),
-            "outSR": 4326, "f": "geojson", "resultOffset": offset, "resultRecordCount": page,
-            "geometryPrecision": 6,
-        })
+        p = dict(base_params, resultOffset=offset, resultRecordCount=page)
+        d = call(url + "/query", p)
         got = d.get("features", [])
         feats += got
-        print(f"    {len(feats)} features", file=sys.stderr)
-        if len(got) < page and not d.get("exceededTransferLimit") and not d.get("properties", {}).get("exceededTransferLimit"):
+        more = d.get("exceededTransferLimit") or (d.get("properties") or {}).get("exceededTransferLimit")
+        log(f"    {len(feats)} features")
+        if not got or (len(got) < page and not more):
             break
         offset += len(got)
-        if not got:
-            break
-    return {"type": "FeatureCollection", "features": feats}
+    return feats
 
-def intersect(url, geom, out_fields="*", geometry=False):
-    """Features of `url` intersecting one GeoJSON polygon (sent as Esri JSON, WGS84)."""
-    rings = geom["coordinates"] if geom["type"] == "Polygon" else [r for p in geom["coordinates"] for r in p]
-    esri = {"rings": rings, "spatialReference": {"wkid": 4326}}
-    d = get(url + "/query", {
-        "geometry": json.dumps(esri), "geometryType": "esriGeometryPolygon", "inSR": 4326,
-        "spatialRel": "esriSpatialRelIntersects", "outFields": out_fields,
-        "returnGeometry": str(geometry).lower(), "outSR": 4326, "f": "geojson", "geometryPrecision": 6,
-    })
-    return d.get("features", [])
+def geo(url, where="1=1", out_fields="*", envelope=None, page=1000):
+    p = {"where": where, "outFields": out_fields, "returnGeometry": "true",
+         "outSR": 4326, "f": "geojson", "geometryPrecision": 6}
+    if envelope:
+        p.update({"geometry": ",".join(map(str, envelope)), "geometryType": "esriGeometryEnvelope",
+                  "inSR": 4326, "spatialRel": "esriSpatialRelIntersects"})
+    return {"type": "FeatureCollection", "features": query_pages(url, p, page)}
+
+def attrs_in(url, field, values, out_fields, batch=100, quote=True):
+    out = []
+    for i in range(0, len(values), batch):
+        vals = values[i:i + batch]
+        ins = ",".join((f"'{v}'" if quote else str(v)) for v in vals)
+        d = call(url + "/query", {"where": f"{field} IN ({ins})", "outFields": out_fields,
+                                  "returnGeometry": "false", "f": "json"})
+        out += [f["attributes"] for f in d.get("features", [])]
+    return out
+
+def rings_of(g):
+    if g["type"] == "Polygon":
+        return g["coordinates"]
+    if g["type"] == "MultiPolygon":
+        return [r for p in g["coordinates"] for r in p]
+    return []
+
+def bbox(features, pad=0.002):
+    xs, ys = [], []
+    for f in features:
+        for r in rings_of(f.get("geometry") or {"type": "x"}):
+            for x, y in r:
+                xs.append(x); ys.append(y)
+    return [min(xs) - pad, min(ys) - pad, max(xs) + pad, max(ys) + pad]
 
 def main():
     ap = argparse.ArgumentParser()
@@ -108,79 +113,94 @@ def main():
     ap.add_argument("--refresh", action="store_true")
     a = ap.parse_args()
     slug = a.city.lower().replace(" ", "-")
-    os.makedirs(RAW, exist_ok=True)
+    R = a.refresh
+    os.makedirs(os.path.join(RAW, slug), exist_ok=True)
 
-    # 1. Layer metadata (so field names are discovered, not guessed)
-    urls, metas = {}, {}
-    for k, base in SRC.items():
+    # 1. Find the exact jurisdiction spelling SCAG uses for this city
+    names = cached("meta/he_jurisdictions.json", lambda: sorted({
+        x["attributes"]["Jurisdiction"] for x in call(LAYERS["he_sites"] + "/query", {
+            "where": "COUNTY='Orange'", "outFields": "Jurisdiction", "returnDistinctValues": "true",
+            "returnGeometry": "false", "f": "json"}).get("features", [])}), R)
+    key = re.sub(r"[^a-z]", "", a.city.lower())
+    match = [n for n in names if key in re.sub(r"[^a-z]", "", str(n).lower())]
+    log(f"[he_sites] OC jurisdictions: {len(names)}; match for {a.city!r}: {match}")
+    if not match:
+        log("No match. Available names:", names); sys.exit(1)
+    jur = match[0].replace("'", "''")
+
+    # 2. Housing-element sites (polygons + capacity)
+    sites = cached(f"{slug}/he_sites.geojson",
+                   lambda: geo(LAYERS["he_sites"], f"COUNTY='Orange' AND Jurisdiction='{jur}'"), R)
+    if not sites["features"]:
+        os.remove(os.path.join(RAW, slug, "he_sites.geojson"))
+        log("0 sites returned; cache removed so the next run retries."); sys.exit(1)
+    log(f"[he_sites] {len(sites['features'])} sites")
+    env = bbox(sites["features"])
+
+    # 3. Zoning + existing land use joined by SCAG parcel id (attributes only)
+    pids = sorted({f["properties"].get("PID24") for f in sites["features"]} - {None, ""})
+    log(f"[zoning/landuse] {len(pids)} parcel ids")
+    cached(f"{slug}/zoning.json", lambda: attrs_in(LAYERS["zoning"], "PID24", pids,
+           "PID24,APN24,CITY,ACRES,SLOPE,ZN24_CITY,ZN24_SCAG,YEAR_ZN"), R)
+    cached(f"{slug}/landuse.json", lambda: attrs_in(LAYERS["landuse"], "PID24", pids,
+           "PID24,APN24,ACRES,SLOPE,LU24,LU24_2ND,YEAR"), R)
+
+    # 4. Constraint layers clipped to the city's bounding box (polygons)
+    for k, fields in [("flood", "FLD_ZONE,ZONE_SUBTY,SFHA_TF"), ("fire_lra", "HAZ_CLASS,HAZ_CODE,INCORP"),
+                      ("hqta", "hqta_type,agency_primary,hqta_details")]:
+        log(f"[{k}]")
         try:
-            urls[k] = cached(f"meta/{k}_url.json", lambda b=base: layer_url(b), a.refresh)
-            metas[k] = cached(f"meta/{k}.json", lambda u=urls[k]: get(u, {"f": "json"}), a.refresh)
-            print(f"[meta] {k}: {len(fields(metas[k]))} fields", file=sys.stderr)
+            cached(f"{slug}/{k}.geojson", lambda k=k, fl=fields: geo(LAYERS[k], "1=1", fl, env, page=500), R)
         except Exception as e:
-            print(f"[meta] {k}: FAILED {e}", file=sys.stderr)
+            log(f"  {k} FAILED: {e}")
 
-    # 2. Housing-element sites for the city
-    hf = fields(metas["he_sites"])
-    jur = pick(hf, r"^Jurisdiction$", r"jurisdic", r"^CITY$")
-    where = f"UPPER({jur}) LIKE '%{a.city.upper()}%'"
-    print(f"[he_sites] where {where}", file=sys.stderr)
-    sites = cached(f"{slug}/he_sites.geojson", lambda: query_all(urls["he_sites"], where), a.refresh)
-    print(f"[he_sites] {len(sites['features'])} sites", file=sys.stderr)
-
-    # 3. Per-site checks (cached one file per site so a crash can resume)
-    checks = {
-        "footprints": ("footprints", True),
-        "flood": ("flood", False),
-        "fire_lra": ("fire_lra", False),
-        "hqta": ("hqta", False),
-        "zoning": ("zoning", False),
-        "landuse": ("landuse", False),
-    }
+    # 5. Building footprints per site (polygon intersect; POST so long polygons are fine)
+    fp_dir = f"{slug}/footprints"
     for i, f in enumerate(sites["features"]):
         g = f.get("geometry")
-        if not g or g["type"] not in ("Polygon", "MultiPolygon"):
+        if not g or not rings_of(g):
             continue
-        sid = f"site{i:04d}"
-        for name, (k, want_geom) in checks.items():
-            if k not in urls:
-                continue
-            try:
-                cached(f"{slug}/checks/{sid}_{name}.json",
-                       lambda u=urls[k], g=g, w=want_geom: intersect(u, g, geometry=w), a.refresh)
-            except Exception as e:
-                print(f"  {sid} {name}: {e}", file=sys.stderr)
-        if i % 10 == 0:
-            print(f"[checks] {i+1}/{len(sites['features'])}", file=sys.stderr)
+        oid = f["properties"].get("OBJECTID", i)
+        def q(g=g):
+            esri = {"rings": rings_of(g), "spatialReference": {"wkid": 4326}}
+            d = call(LAYERS["footprints"] + "/query", {
+                "geometry": json.dumps(esri), "geometryType": "esriGeometryPolygon", "inSR": 4326,
+                "spatialRel": "esriSpatialRelIntersects", "outFields": "Height", "returnGeometry": "true",
+                "outSR": 4326, "f": "geojson", "geometryPrecision": 6})
+            return d.get("features", [])
+        try:
+            cached(f"{fp_dir}/{oid}.json", q, R)
+        except Exception as e:
+            log(f"  footprints {oid}: {e}")
+        if i % 25 == 0:
+            log(f"[footprints] {i + 1}/{len(sites['features'])}")
 
-    # 4. Santa Ana assessor values by APN (only for Santa Ana)
-    if a.city.lower() == "santa ana" and "sa_parcels" in metas:
-        pf = fields(metas["sa_parcels"])
-        apn_f = pick(pf, r"^APN$", r"APN", r"ASSESS")
-        he_apn = pick(hf, r"Assessor_Parcel", r"APN")
-        apns = sorted({re.sub(r"\D", "", str(s["properties"].get(he_apn) or "")) for s in sites["features"]} - {""})
-        # Privacy: never download owner names or mailing addresses. Keep APN, values, use, size, year only.
-        keep = [n for n in pf if re.search(r"APN|LAND|IMPR|VAL|YEAR|YR|USE|ACRE|SQ|AREA|ZON", n, re.I)
-                and not re.search(r"MAIL|OWNER|NAME|ADDR|SITUS|PHONE|EMAIL", n, re.I)]
-        sa_fields = ",".join(dict.fromkeys([apn_f] + keep))
-        print(f"[sa_parcels] {len(apns)} APNs via field {apn_f}; fields {sa_fields}", file=sys.stderr)
-        out = []
-        for j in range(0, len(apns), 50):
-            batch = apns[j:j + 50]
-            def q(batch=batch):
+    # 6. Santa Ana assessor land vs. building value (privacy: values only, no owner/mailing fields)
+    if slug == "santa-ana":
+        apns = sorted({re.sub(r"\D", "", str(f["properties"].get("Assessor_Parcel_Number") or f["properties"].get("APN24") or ""))
+                       for f in sites["features"]} - {""})
+        log(f"[sa_parcels] {len(apns)} APNs")
+        def sa():
+            out = []
+            for i in range(0, len(apns), 100):
+                batch = apns[i:i + 100]
                 ins = ",".join(f"'{x}'" for x in batch)
-                # match with or without dashes
-                w = f"REPLACE({apn_f},'-','') IN ({ins})"
-                try:
-                    return get(urls["sa_parcels"] + "/query", {"where": w, "outFields": sa_fields, "returnGeometry": "false", "f": "json"}).get("features", [])
-                except Exception:
-                    return get(urls["sa_parcels"] + "/query", {"where": f"{apn_f} IN ({ins})", "outFields": sa_fields, "returnGeometry": "false", "f": "json"}).get("features", [])
-            out += cached(f"{slug}/sa_parcels_{j:05d}.json", q, a.refresh)
-        print(f"[sa_parcels] {len(out)} matched", file=sys.stderr)
+                for where in (f"REPLACE(AssessmentNo,'-','') IN ({ins})", f"AssessmentNo IN ({ins})"):
+                    try:
+                        d = call(LAYERS["sa_parcels"] + "/query", {"where": where,
+                                 "outFields": "AssessmentNo,LandVal,ImprovedVal,AssdAmt,LotType",
+                                 "returnGeometry": "false", "f": "json"})
+                        out += [x["attributes"] for x in d.get("features", [])]
+                        break
+                    except Exception as e:
+                        log(f"  sa_parcels where failed, trying next form: {e}")
+            return out
+        rows = cached(f"{slug}/sa_parcels.json", sa, R)
+        log(f"[sa_parcels] {len(rows)} matched")
 
     with open(os.path.join(RAW, slug, "FETCHED_AT.txt"), "w") as fh:
         fh.write(time.strftime("%Y-%m-%d %H:%M %Z") + "\n")
-    print("done", file=sys.stderr)
+    log("done")
 
 if __name__ == "__main__":
     main()
