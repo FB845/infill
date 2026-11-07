@@ -8,6 +8,7 @@ response is cached, so re-running only fetches what is missing.
 Usage:  python3 scripts/fetch_data.py                 (defaults to Anaheim)
         python3 scripts/fetch_data.py --city "Fullerton"
         python3 scripts/fetch_data.py --refresh       (re-download everything)
+        python3 scripts/fetch_data.py --list          (show the OC cities in the layer)
 """
 import argparse, json, os, re, sys, time, urllib.parse, urllib.request
 
@@ -107,10 +108,37 @@ def bbox(features, pad=0.002):
                 xs.append(x); ys.append(y)
     return [min(xs) - pad, min(ys) - pad, max(xs) + pad, max(ys) + pad]
 
+SURPLUS_PKG = "https://data.ca.gov/api/3/action/package_show?id=surplus-land-act-notices-of-availability-received"
+
+def fetch_surplus(refresh=False):
+    """Statewide HCD Surplus Land Act notices (CSV), cached once in raw/surplus/."""
+    out = os.path.join(RAW, "surplus", "notices.csv")
+    if os.path.exists(out) and not refresh:
+        return out
+    req = urllib.request.Request(SURPLUS_PKG, headers={"User-Agent": "infill-hackathon-prototype/0.2"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        pkg = json.loads(r.read().decode())["result"]
+    res = [x for x in pkg.get("resources", []) if str(x.get("format", "")).lower() == "csv" or str(x.get("url", "")).lower().endswith(".csv")]
+    if not res:
+        raise RuntimeError("no CSV resource in the data.ca.gov package")
+    url = res[0]["url"]
+    log(f"[surplus] downloading {url}")
+    req = urllib.request.Request(url, headers={"User-Agent": "infill-hackathon-prototype/0.2"})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        data = r.read()
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with open(out, "wb") as f:
+        f.write(data)
+    with open(os.path.join(RAW, "surplus", "SOURCE.json"), "w") as f:
+        json.dump({"package": SURPLUS_PKG, "csv": url, "modified": pkg.get("metadata_modified"), "fetched": time.strftime("%Y-%m-%d %H:%M %Z")}, f)
+    log(f"[surplus] {len(data)//1024} KB")
+    return out
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--city", default="Anaheim")
     ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--list", action="store_true")
     a = ap.parse_args()
     slug = a.city.lower().replace(" ", "-")
     R = a.refresh
@@ -121,8 +149,11 @@ def main():
         x["attributes"]["Jurisdiction"] for x in call(LAYERS["he_sites"] + "/query", {
             "where": "COUNTY='Orange'", "outFields": "Jurisdiction", "returnDistinctValues": "true",
             "returnGeometry": "false", "f": "json"}).get("features", [])}), R)
+    if a.list:
+        print("\n".join(n.title() for n in names)); return
     key = re.sub(r"[^a-z]", "", a.city.lower())
-    match = [n for n in names if key in re.sub(r"[^a-z]", "", str(n).lower())]
+    match = [n for n in names if key == re.sub(r"[^a-z]", "", str(n).lower())] or \
+            [n for n in names if key in re.sub(r"[^a-z]", "", str(n).lower())]
     log(f"[he_sites] OC jurisdictions: {len(names)}; match for {a.city!r}: {match}")
     if not match:
         log("No match. Available names:", names); sys.exit(1)
@@ -197,6 +228,12 @@ def main():
             return out
         rows = cached(f"{slug}/sa_parcels.json", sa, R)
         log(f"[sa_parcels] {len(rows)} matched")
+
+    # 7. Surplus public land notices (statewide file, filtered per city at build time)
+    try:
+        fetch_surplus(R)
+    except Exception as e:
+        log(f"[surplus] FAILED: {e}")
 
     with open(os.path.join(RAW, slug, "FETCHED_AT.txt"), "w") as fh:
         fh.write(time.strftime("%Y-%m-%d %H:%M %Z") + "\n")

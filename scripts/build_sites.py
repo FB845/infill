@@ -7,7 +7,7 @@ judgment calls are labelled ASSUMPTION here, in the UI and in the README.
 
 Usage: python3 scripts/build_sites.py [--city "Anaheim"]
 """
-import argparse, json, math, os, re, sys, time
+import argparse, csv, glob, json, math, os, re, sys, time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, "raw")
@@ -30,6 +30,7 @@ SRC = {
     "fire": ("OC Fire Hazard Severity Zones (LRA)", "https://www.ocgis.com/arcpub/rest/services/Map_Layers/Fire_Hazard_Severity_Zones_LRA/MapServer/0"),
     "hqta": ("Caltrans High Quality Transit Areas", "https://caltrans-gis.dot.ca.gov/arcgis/rest/services/CHrailroad/CA_HQ_Transit_Areas/FeatureServer/0"),
     "ab2097": ("HCD Technical Advisory: AB 2097", "https://www.hcd.ca.gov/sites/default/files/docs/policy-and-research/ab-2097-ta.pdf"),
+    "surplus": ("HCD Surplus Land Act Notices of Availability (data.ca.gov)", "https://data.ca.gov/dataset/surplus-land-act-notices-of-availability-received"),
 }
 
 def load(path, default=None):
@@ -95,6 +96,94 @@ def apn_fmt(a):
 def num(v):
     try: return float(v)
     except (TypeError, ValueError): return None
+
+def col(headers, *pats, avoid=None):
+    for p in pats:
+        for h in headers:
+            if re.search(p, h, re.I) and not (avoid and re.search(avoid, h, re.I)):
+                return h
+    return None
+
+def parse_acres(acres, size):
+    a = num(str(acres or "").replace(",", ""))
+    if a: return a
+    t = str(size or "").lower().replace(",", "")
+    m = re.search(r"([\d.]+)\s*(ac|acre)", t)
+    if m: return float(m.group(1))
+    m = re.search(r"([\d.]+)\s*(sf|sq)", t)
+    if m: return float(m.group(1)) / 43560
+    return None
+
+def surplus_sites(city, flood_i, fire_i, hqta_i, have, day):
+    path = os.path.join(RAW, "surplus", "notices.csv")
+    if not os.path.exists(path):
+        print("  (no raw/surplus/notices.csv yet: surplus layer skipped)"); return [], None
+    smeta_src = load("surplus/SOURCE.json", {}) or {}
+    with open(path, encoding="utf-8-sig", errors="replace") as f:
+        rows = list(csv.DictReader(f))
+    H = list(rows[0].keys()) if rows else []
+    c_city = col(H, r"^city$", r"city", avoid=r"county")
+    c_lat, c_lon = col(H, r"^lat", r"latitude"), col(H, r"^lon", r"^long", r"longitude")
+    c_status = col(H, r"status")
+    c_apn = col(H, r"^apn", r"parcel.?num", r"\bapn\b")
+    c_addr = col(H, r"address", r"location", avoid=r"email|mail|contact")
+    c_acres = col(H, r"acre")
+    c_size = col(H, r"parcel.?size", r"size")
+    c_agency = col(H, r"agency", r"jurisdiction", r"local.?gov", avoid=r"contact|email|phone")
+    c_zone = col(H, r"zoning")
+    c_gp = col(H, r"general.?plan")
+    c_use = col(H, r"existing.?use", r"current.?use", r"use")
+    c_date = col(H, r"date", r"received")
+    print(f"  surplus columns: city={c_city} lat={c_lat} lon={c_lon} status={c_status} apn={c_apn} addr={c_addr} acres={c_acres} size={c_size} agency={c_agency}")
+    key = re.sub(r"[^a-z]", "", city.lower())
+    out = []
+    for i, r in enumerate(rows):
+        if not c_city or re.sub(r"[^a-z]", "", str(r.get(c_city, "")).lower()) != key:
+            continue
+        lat, lon = num(r.get(c_lat)), num(r.get(c_lon))
+        if lat is None or lon is None or not (32 < lat < 35.5 and -119.5 < lon < -116):
+            continue
+        status = str(r.get(c_status) or "").strip()
+        active = "archiv" not in status.lower()
+        acres = parse_acres(r.get(c_acres), r.get(c_size))
+        pt = (lon, lat)
+        checks = [{"group": "Still available?", "test": "Surplus notice status",
+                   "status": "pass" if active else "unknown",
+                   "detail": (f"Notice status: {status}" if status else "No status given") + ("" if active else ". Archived notices may no longer be available"),
+                   "source": SRC["surplus"][0], "url": SRC["surplus"][1]}]
+        for k, idx, test, src in (("flood", flood_i, "Flood zone", "flood"), ("fire_lra", fire_i, "Fire hazard zone", "fire"), ("hqta", hqta_i, "High-quality transit", "hqta")):
+            if not have[k]:
+                checks.append({"group": "Usable?", "test": test, "status": "unknown", "detail": "Layer not fetched", "source": SRC[src][0], "url": SRC[src][1]}); continue
+            h = hits(pt, idx)
+            if k == "flood":
+                bad = [x for x in h if str(x["properties"].get("SFHA_TF")).upper() == "T"]
+                checks.append({"group": "Usable?", "test": test, "status": "fail" if bad else "pass",
+                               "detail": "In a special flood hazard area" if bad else "Not in a mapped special flood hazard area", "source": SRC[src][0], "url": SRC[src][1]})
+            elif k == "fire_lra":
+                checks.append({"group": "Usable?", "test": test, "status": "fail" if h else "pass",
+                               "detail": "In a fire hazard severity zone" if h else "Not in a mapped local-responsibility fire zone", "source": SRC[src][0], "url": SRC[src][1]})
+            else:
+                checks.append({"group": "Usable?", "test": test, "status": "pass" if h else "fail",
+                               "detail": "Inside a Caltrans High Quality Transit Area" if h else "Not inside a Caltrans High Quality Transit Area", "source": SRC[src][0], "url": SRC[src][1]})
+        apn = apn_fmt(r.get(c_apn)) if c_apn else None
+        addr = str(r.get(c_addr) or "").strip() if c_addr else ""
+        agency = str(r.get(c_agency) or "").strip() if c_agency else ""
+        unknowns = sum(1 for x in checks if x["status"] == "unknown")
+        out.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": {
+            "id": f"SL-{i}", "kind": "surplus", "label": addr or (f"APN {apn}" if apn else f"Surplus notice {i}"), "apn": apn,
+            "city": city, "acres": round(acres, 2) if acres else None, "zoning": (str(r.get(c_zone) or "").strip() or None) if c_zone else None,
+            "general_plan": (str(r.get(c_gp) or "").strip() or None) if c_gp else None,
+            "existing_use": (str(r.get(c_use) or "").strip() or None) if c_use else None,
+            "agency": agency or None, "notice_date": (str(r.get(c_date) or "").strip() or None) if c_date else None,
+            "active": active, "status_text": status or None,
+            "checks": checks, "assumptions": [], "confidence": "high" if unknowns == 0 else ("medium" if unknowns == 1 else "low"),
+            "summary": f"Public land listed as surplus{' by ' + agency if agency else ''}" + (f" · {acres:.2f} ac" if acres else "") + ("" if active else " · archived notice"),
+            "flags": {"open": active, "no_flood": any(c["test"] == "Flood zone" and c["status"] == "pass" for c in checks),
+                      "no_fire": any(c["test"] == "Fire hazard zone" and c["status"] == "pass" for c in checks),
+                      "near_transit": any(c["test"] == "High-quality transit" and c["status"] == "pass" for c in checks), "low_income": False},
+        }})
+    meta = {"rows_statewide": len(rows), "csv": smeta_src.get("csv"), "modified": smeta_src.get("modified"), "fetched": smeta_src.get("fetched")}
+    return out, meta
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--city", default="Anaheim"); a = ap.parse_args()
@@ -246,18 +335,39 @@ def main():
         f["properties"]["rank"] = r
         f["properties"]["top"] = r <= TOP_N
     cx = sum(centroid(f["geometry"])[0] for f in out) / len(out); cy = sum(centroid(f["geometry"])[1] for f in out) / len(out)
-    meta = {"city": a.city, "center": [cy, cx], "zoom": 13, "pulled": pulled, "built": time.strftime("%Y-%m-%d %H:%M"),
-            "count": len(out), "top_n": TOP_N,
+    surplus, smeta = surplus_sites(a.city, flood_i, fire_i, hqta_i, have, day)
+    meta = {"city": a.city, "slug": slug, "center": [cy, cx], "zoom": 13, "pulled": pulled, "built": time.strftime("%Y-%m-%d %H:%M"),
+            "count": len(out), "top_n": TOP_N, "surplus_count": len(surplus),
+            "surplus_active": sum(1 for f in surplus if f["properties"]["active"]), "surplus_meta": smeta,
             "sources": [{"name": n, "url": u, "checked": day} for n, u in SRC.values()],
             "ranking": "ASSUMPTION (our weights): +4 if the city listed any lower-income capacity, + lower-income capacity / 25 (max +4), +3 mostly open, -2 may be built out, +2 inside a high-quality transit area, -5 per flood or fire fail"}
+    os.makedirs(os.path.join(ROOT, "data", "cities"), exist_ok=True)
+    payload = {"meta": meta, "sites": {"type": "FeatureCollection", "features": out},
+               "surplus": {"type": "FeatureCollection", "features": surplus}}
     js = ("// Generated by scripts/build_sites.py from public data. Do not edit by hand.\n"
-          f"window.SITES_META = {json.dumps(meta)};\n"
-          f"window.SITES = {json.dumps({'type': 'FeatureCollection', 'features': out}, separators=(',', ':'))};\n")
-    with open(os.path.join(ROOT, "data", "sites.js"), "w") as fh:
+          "window.INFILL_CITIES = window.INFILL_CITIES || {};\n"
+          f"window.INFILL_CITIES[{json.dumps(slug)}] = {json.dumps(payload, separators=(',', ':'))};\n")
+    with open(os.path.join(ROOT, "data", "cities", f"{slug}.js"), "w") as fh:
         fh.write(js)
-    print(f"wrote data/sites.js: {len(out)} sites, {len(js)//1024} KB. Top {TOP_N}:")
+    # City index for the picker
+    idx = []
+    for pth in sorted(glob.glob(os.path.join(ROOT, "data", "cities", "*.js"))):
+        txt = open(pth).read()
+        m = re.search(r'= (\{"meta":\{.*?\}),"sites"', txt)
+        try:
+            mm = json.loads(m.group(1) + "}")["meta"]
+        except Exception:
+            continue
+        idx.append({"slug": mm["slug"], "city": mm["city"], "count": mm["count"], "surplus": mm.get("surplus_count", 0), "pulled": mm["pulled"]})
+    with open(os.path.join(ROOT, "data", "cities.js"), "w") as fh:
+        fh.write("// Generated by scripts/build_sites.py\nwindow.INFILL_CITY_INDEX = " + json.dumps(idx) + ";\n")
+    old_single = os.path.join(ROOT, "data", "sites.js")
+    if os.path.exists(old_single):
+        os.remove(old_single)
+    print(f"wrote data/cities/{slug}.js: {len(out)} sites + {len(surplus)} surplus notices ({meta['surplus_active']} active), {len(js)//1024} KB. Top {TOP_N}:")
     for f in out[:TOP_N]:
         q = f["properties"]; print(f"  #{q['rank']:>2} {q['label']:<18} score {q['score']:>5}  {q['summary']}")
+    print("cities in the picker:", ", ".join(f"{x['city']} ({x['count']})" for x in idx))
 
 if __name__ == "__main__":
     main()
