@@ -62,6 +62,15 @@ def claude(site):
     out["model"] = d.get("model", MODEL)
     return out
 
+def pick_model():
+    global MODEL
+    req = urllib.request.Request("https://api.anthropic.com/v1/models?limit=50",
+                                 headers={"x-api-key": KEY, "anthropic-version": "2023-06-01"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        ids = [m["id"] for m in json.loads(r.read().decode()).get("data", [])]
+    MODEL = next((i for i in ids if "sonnet" in i), ids[0] if ids else MODEL)
+    sys.stderr.write(f"switched to model {MODEL}\n")
+
 class H(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *a, **k):
         super().__init__(*a, directory=ROOT, **k)
@@ -100,8 +109,15 @@ class H(http.server.SimpleHTTPRequestHandler):
             return self.send_json(404, {"error": "unknown"})
         if not KEY:
             return self.send_json(503, {"error": "No ANTHROPIC_API_KEY set. Showing the plain template instead."})
+        site = self.body().get("site", {})
         try:
-            return self.send_json(200, claude(self.body().get("site", {})))
+            try:
+                return self.send_json(200, claude(site))
+            except urllib.error.HTTPError as e:
+                if e.code != 404:
+                    raise
+                pick_model()  # model name not available on this key: choose one that is, retry once
+                return self.send_json(200, claude(site))
         except urllib.error.HTTPError as e:
             return self.send_json(502, {"error": f"Claude API {e.code}: {e.read().decode()[:300]}"})
         except Exception as e:
