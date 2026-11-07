@@ -66,9 +66,20 @@ function verdict(p, v) {
 
 // ---------- map ----------
 const map = L.map("map").setView(meta.center || [33.835, -117.914], meta.zoom || 12);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-  attribution: '&copy; OpenStreetMap contributors &copy; CARTO', maxZoom: 20,
-}).addTo(map);
+// Basemap: OpenStreetMap standard tiles, with Esri light gray as an automatic backup.
+const BASEMAPS = [
+  ["https://tile.openstreetmap.org/{z}/{x}/{y}.png", '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', 19],
+  ["https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", "Tiles &copy; Esri", 16],
+];
+let baseIdx = 0, baseErrors = 0, base;
+function setBase(i) {
+  if (base) map.removeLayer(base);
+  const [url, attribution, maxZoom] = BASEMAPS[i];
+  base = L.tileLayer(url, { attribution, maxZoom: 19, maxNativeZoom: maxZoom }).addTo(map);
+  base.bringToBack();
+  base.on("tileerror", () => { if (++baseErrors > 4 && baseIdx < BASEMAPS.length - 1) { baseErrors = 0; setBase(++baseIdx); } });
+}
+setBase(0);
 
 let topOnly = true, view = "map";
 const active = new Set();
