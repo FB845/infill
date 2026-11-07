@@ -27,7 +27,7 @@ def load_env():
                 os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 load_env()
 KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-5")
+MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5-5")
 
 SYSTEM = """You prepare call sheets for a one-person acquisitions lead at a small affordable-housing nonprofit in Orange County, California.
 You get ONE candidate site as JSON. Every fact you may use is in that JSON.
