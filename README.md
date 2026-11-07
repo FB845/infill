@@ -1,60 +1,130 @@
 # Infill
 
-**Nonprofits find land by luck. Infill finds it on purpose.**
+> For a one-person nonprofit acquisitions team: a ranked list of the sites in one Orange County city worth calling about this month, with every check shown as pass, fail or unknown, and its source.
 
-Built at the Claude Impact Lab: UCI x SoCal Affordable Housing (Nov 7, 2026). Lane: **Find it**.
+**Team:** Infill
+**Members:** Freddie Jiang
+**Lane:** 1 Find it
+**Built at:** Claude Impact Lab: UCI × SoCal Affordable Housing, November 7, 2026
 
-## One-line summary
-A map that screens public parcel and zoning data for <CITY> and shows which lots a nonprofit builder could pursue for affordable homes, with the reasons and sources for every flag.
+## The real user
 
-## Real user
-**Who:** <e.g. a site-acquisition lead at a Habitat-style nonprofit builder in Orange County>
-**Before:** <how they find sites today: broker tips, word of mouth, driving around, luck>
-**After:** <they open Infill, filter to lots that pass every check, and get a shortlist with reasons and sources in minutes>
+A one-person acquisitions lead at a small housing nonprofit in Orange County (the lane's scenario F02). They have no GIS team, and most of their sites still come from luck: a city calls about surplus land, or a congregation offers its parking lot. Cities already publish lists of sites they say can take new homes, but the lists are filed when the plan is adopted, so nobody knows which sites are still open, which are usable, and which one to call first.
 
-## What it does
-1. Loads public parcel, zoning and transit data for <CITY>.
-2. Flags each parcel against simple screening checks:
-   - Vacant or underused
-   - Big enough to build on
-   - Zoning likely allows housing
-   - Near frequent transit
-3. Ranks the matches and gives each one a confidence label (high / medium / low).
-4. Explains *why* each site was flagged, with a source for every reason.
-5. Ends every site card with a "verify on the ground" step: public records can be out of date, so the next step is a site visit or existing-conditions survey (e.g. 3D scan) and a check with the city.
+**Before:** they open a city's housing-element PDF, look up parcels one at a time across several county and state map viewers, and still can't tell whether a site has been built on since the list was made.
 
-Infill is a screening tool. It does not make zoning or eligibility determinations.
+**After:** they open Infill, see Anaheim's 124 listed sites ranked, and get a top 10 to call this month. Each site says what passed, what failed and what is still unknown, with a link to the source, and ends with the next step: verify on the ground.
 
-## Run it
-Open `index.html` in a browser. No server or API key needed.
-To rebuild the data: `python3 scripts/build_sites.py` (writes `data/sites.js`).
+## What we built
 
-## Sources
-| Data | Source | Link | Date pulled |
-|---|---|---|---|
-| Parcels | <lane starter data / county> | <link> | 2026-11-07 |
-| Zoning | <city GIS> | <link> | 2026-11-07 |
-| Transit stops | <OCTA GTFS> | <link> | 2026-11-07 |
-| Laws referenced | <e.g. AB 2011, SB 4, Housing Element site inventory> | <link> | |
+A map of every adopted housing-element site in Anaheim (124 sites, from SCAG's regional layer). Each site is checked against public data:
 
-## Assumptions (every assumed number is labeled)
-- <e.g. "Underused" = improvement value under X% of land value — ASSUMED threshold>
-- <e.g. "Big enough" = at least X acres — ASSUMED>
-- <e.g. "Near transit" = within 0.5 mi of a frequent stop — ASSUMED>
+| Question | Check | Data |
+|---|---|---|
+| Still available? | How much of the lot is covered by buildings | OC Building Footprints |
+| Usable? | In a special flood hazard area? | OC Floodplains (FEMA zones) |
+| Usable? | In a fire hazard severity zone? | OC Fire Hazard Severity Zones (LRA) |
+| Usable? | Inside a high-quality transit area? (parking minimums may not apply under AB 2097) | Caltrans HQTA |
+| Room for lower-income homes? | Lower-income capacity the city itself listed | SCAG Housing Element Sites |
 
-## Data schema (`data/sites.js`)
-`window.SITES` is a GeoJSON FeatureCollection. Each feature's `properties`:
-- `id`, `label`, `apn`, `city`, `acres`, `zoning`
-- `flags`: `{ underused, size_ok, zoning_allows, near_transit }` (booleans)
-- `score` (number, for ranking), `confidence` (`high` | `medium` | `low`)
-- `summary` (one plain-English line)
-- `reasons`: `[{ text, source, url }]`
-- `assumptions`: `[string]`
+Each check is **pass**, **fail** or **unknown**. Unknown means the data was missing or the result is in a gray zone, and the tool says so instead of guessing. Sites are ranked with simple weights shown on screen, and every site card ends with "verify on the ground": confirm what is actually on the lot, who owns it and whether they'd sell, and check eligibility with the city.
 
-No owner names or other personal information are stored or shown.
+What it found on November 7, 2026:
 
-## Scale
-The pipeline only needs parcel, zoning and transit layers, which every county and most cities publish. Pointing it at a new city means swapping the input files, so the next 100 projects come from running the same screen across OC cities, not from new code.
+- 124 adopted sites in Anaheim (housing element year 2025), with 8,887 homes of listed capacity, of which 576 are listed as lower-income.
+- Only 18 of the 124 sites list any lower-income capacity. The top 10 covers 343 of the 576.
+- 36 sites look mostly open (buildings cover under 15% of the lot), 36 look built out (over 40%), and 52 are in between and need a look.
+- All 124 sites pass the flood and fire checks, and 103 are inside a high-quality transit area.
+
+**Demo video:** uploaded on the hub
+**Live demo:** run it locally (see Try it). It is a static page, so it also works from GitHub Pages.
+
+## How Claude is used
+
+- **Building it:** Claude (in Cowork, with Claude Code style tools) read the lane repo and its `DATA-SOURCES.md`, found which public layers could answer each question, wrote the fetch and scoring scripts, built the map, and checked it in a headless browser. It also caught that Santa Ana is missing from the SCAG housing-element layer, and switched the city to Anaheim.
+- **At run time:** the tool itself is deterministic. Every check comes from a query against public data, and nothing on screen is generated text that a person has to trust. A person checks what is "unknown" and does the ground verification.
+
+## Try it
+
+You need Python 3.8 or newer (standard library only, nothing to install) and a web browser.
+
+```bash
+git clone https://github.com/FB845/infill.git
+cd infill
+open index.html            # macOS. On Windows or Linux, open index.html in a browser
+```
+
+The repo includes the processed data (`data/sites.js`), so the map works with no accounts and no keys. To re-pull the public data and rebuild it:
+
+```bash
+python3 scripts/fetch_data.py                   # downloads and caches into raw/ (about 3 minutes, gentle on public servers)
+python3 scripts/build_sites.py                  # writes data/sites.js and prints the top 10
+python3 scripts/fetch_data.py --city Fullerton  # any city in the SCAG housing-element layer
+python3 scripts/build_sites.py --city Fullerton
+```
+
+No API keys are used anywhere, so there is no `.env` file. Leaflet 1.9.4 is vendored in `vendor/` so the demo runs on slow Wi-Fi. Only the street basemap tiles need internet.
+
+## Sources and assumptions
+
+| Item | Source or assumption | Date checked |
+|---|---|---|
+| Housing-element sites, capacity by income | [SCAG HousingElementSite_poly_scag](https://maps.scag.ca.gov/scaggis/rest/services/LDX/HousingElementSite_poly_scag/MapServer) | 2026-11-07 |
+| Zoning per parcel | [SCAG Zoning_poly_OR](https://maps.scag.ca.gov/scaggis/rest/services/LDX/Zoning_poly_OR/MapServer) | 2026-11-07 |
+| Existing land use code per parcel | [SCAG Existinglanduse_poly_OR](https://maps.scag.ca.gov/scaggis/rest/services/LDX/Existinglanduse_poly_OR/MapServer) | 2026-11-07 |
+| Building footprints | [OC Building Footprints](https://www.ocgis.com/arcpub/rest/services/Map_Layers/Building_Footprints/MapServer/0) | 2026-11-07 |
+| Flood zones | [OC Floodplains](https://www.ocgis.com/arcpub/rest/services/Map_Layers/Floodplains/MapServer/0) (FEMA zones, county copy; `SFHA_TF = T` counts as a fail) | 2026-11-07 |
+| Fire zones | [OC Fire Hazard Severity Zones LRA](https://www.ocgis.com/arcpub/rest/services/Map_Layers/Fire_Hazard_Severity_Zones_LRA/MapServer/0) | 2026-11-07 |
+| Transit | [Caltrans CA HQ Transit Areas](https://caltrans-gis.dot.ca.gov/arcgis/rest/services/CHrailroad/CA_HQ_Transit_Areas/FeatureServer/0) | 2026-11-07 |
+| AB 2097 (no minimum parking near major transit) | [HCD Technical Advisory](https://www.hcd.ca.gov/sites/default/files/docs/policy-and-research/ab-2097-ta.pdf) | 2026-11-07 |
+| Starting list of sources | [Lane 1 DATA-SOURCES.md](https://github.com/travcjohnson/claude-impact-lab-uci/blob/main/lanes/1-find-it/data/DATA-SOURCES.md) | 2026-11-07 |
+| Buildings cover under 15% of the lot = mostly open | ASSUMPTION (our threshold) | |
+| Buildings cover over 40% of the lot = may be built out | ASSUMPTION (our threshold) | |
+| Building value under 50% / over 150% of land value = underused / redeveloped (used only where assessor values are free, e.g. Santa Ana) | ASSUMPTION (our threshold) | |
+| Ranking weights: +4 if any lower-income capacity, + lower-income capacity / 25 (max +4), +3 mostly open, −2 may be built out, +2 in a high-quality transit area, −5 per flood or fire fail | ASSUMPTION (our weights) | |
+| Top 10 = "sites to call this month" | ASSUMPTION (matches scenario F02) | |
+
+Every number we made up is labelled ASSUMPTION here and in the tool.
+
+## What is real and what is mocked
+
+| Part | Status |
+|---|---|
+| Housing-element sites, capacity, zoning, land use | Working: real public data |
+| Building coverage check | Working: real data, our thresholds |
+| Flood, fire and transit checks | Working: real data |
+| Building vs. land value check | Partly working: code is in place, but only Santa Ana publishes values for free, and Santa Ana is missing from the site layer |
+| Ranking and top 10 | Working: our weights, shown on screen |
+| Ownership, willingness to sell, utilities, contamination | Not built: shown as next steps on every card |
+| Mocked data | None |
+
+## Where it gets things wrong
+
+- **Santa Ana is missing.** SCAG's housing-element layer lists 28 Orange County jurisdictions and Santa Ana isn't one of them, so Infill can't screen it from this layer yet.
+- **Hazard and transit checks use the center of the lot.** A lot that is partly in a flood or fire zone can pass if its center is outside.
+- **Coverage is an estimate.** A building is counted if its center falls inside the lot, so buildings that straddle a lot line can be counted on the wrong side. Parking lots count as open, which is often right for this purpose but not always.
+- **Fire check covers local-responsibility zones only.** State-responsibility zones are not checked yet.
+- **A high-quality transit area is not the same as AB 2097's "major transit stop."** The card says "parking minimums may not apply" and asks the user to confirm.
+- **The capacity numbers are the city's own claims** from the 2025 housing element, not a feasibility study.
+- **Housing-element lists go stale.** That's why the "still available?" check exists, but only a site visit settles it.
+- **No ownership data.** The free county parcel layer has no owner field, so the tool can't say who to call yet.
+
+## Next steps
+
+**For a nonprofit to use it next month:**
+- Run it for every city in the layer (one flag: `--city`).
+- Add the city's surplus-land notices (HCD, data.ca.gov) and SB 4 faith-land leads (worship sites + IRS exempt-org file, labelled as leads, not facts).
+- Add a "who to call" field from public sources.
+
+**With one more week:**
+- Check the whole lot instead of its center.
+- Add state fire zones, slope and contamination (CalEnviroScreen).
+- Add a "verified on the ground" status that a user can set after a site visit or existing-conditions survey, so the list gets more accurate the more it's used.
+
+## Data and privacy
+
+This project uses only public data. It contains no personal information about real tenants, buyers or residents. It does not request owner names or mailing addresses from any source, and stores only parcel numbers, zoning, land use, building outlines and hazard zones. It does not file applications or contact any city or person. It is a prototype and a screening tool, not a zoning, legal or financial determination.
 
 ## License
-MIT
+
+MIT, see the [LICENSE](LICENSE) file.
