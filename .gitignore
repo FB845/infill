@@ -8,3 +8,4 @@ pipeline.json.tmp
 video/node_modules/
 video/out/
 .netlify
+dist/
