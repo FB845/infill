@@ -684,10 +684,51 @@ document.getElementById("checkForm").onsubmit = async (e) => {
   } catch (err) { checkMsg(`Couldn't find it: ${err.message}`); }
 };
 
+
+// ---------- hosted-demo notice (shown when there is no local server) ----------
+const introEl = document.getElementById("intro");
+function showIntro() {
+  const li = (cls, icon, t) => `<li class="${cls}"><span class="tile">${icon}</span><span>${t}</span></li>`;
+  introEl.innerHTML = `<div class="intro" role="dialog" aria-modal="true" aria-labelledby="intro-title">
+    <span class="label">Hosted demo</span>
+    <h2 id="intro-title">Infill: finding land for affordable homes on purpose</h2>
+    <p>This page runs on real public data for four Orange County cities. Two features need the local version, which is free on GitHub.</p>
+    <div class="intro-cols">
+      <div><span class="label">Works here</span><ul>
+        ${li("pass", IC.pass("#FFFFFF", 12), "Ranked sites, checks with sources, and pathways to check")}
+        ${li("pass", IC.pass("#FFFFFF", 12), "City picker and surplus public land")}
+        ${li("pass", IC.pass("#FFFFFF", 12), "Rail, Ground truth, Saved, CSV and PDF export")}
+        ${li("pass", IC.pass("#FFFFFF", 12), "Call sheets from a plain template")}
+      </ul></div>
+      <div><span class="label">Local version only</span><ul>
+        ${li("unknown", IC.unknown("#FFFFFF", 12), "Claude-written call sheets (needs an API key)")}
+        ${li("unknown", IC.unknown("#FFFFFF", 12), "Check any lot: live checks for any address or map click")}
+        ${li("unknown", IC.unknown("#FFFFFF", 12), "Shared team notes. Here, notes save in this browser only")}
+      </ul></div>
+    </div>
+    <p class="meta">Prototype from the Claude Impact Lab (UCI × SoCal Affordable Housing, Nov 7, 2026). Screening only, not a zoning or legal determination.</p>
+    <div class="actions" style="margin:0">
+      <button type="button" class="btn btn-primary" id="introOk">Explore the demo</button>
+      <a class="btn btn-ghost" style="text-decoration:none" href="https://github.com/FB845/infill" target="_blank" rel="noopener">Run it locally (GitHub) ↗</a>
+    </div></div>`;
+  introEl.hidden = false;
+  const close = () => { introEl.hidden = true; try { localStorage.setItem("infill-intro-seen", "1"); } catch {} };
+  introEl.querySelector("#introOk").onclick = close;
+  introEl.onclick = (e) => { if (e.target === introEl) close(); };
+  document.addEventListener("keydown", function esc(e) { if (e.key === "Escape" && !introEl.hidden) { close(); document.removeEventListener("keydown", esc); } });
+  setTimeout(() => introEl.querySelector("#introOk")?.focus(), 0);
+}
+document.getElementById("hostedTag").onclick = showIntro;
+
 // ---------- start ----------
 (async () => {
   await loadState();
-  if (!server) checkMsg("Hosted demo: live lot checks and Claude call sheets run in the local version (github.com/FB845/infill). Notes save in this browser.");
+  if (!server) {
+    checkMsg("Hosted demo: live lot checks run in the local version (github.com/FB845/infill).");
+    document.getElementById("hostedTag").hidden = false;
+    let seen = false; try { seen = localStorage.getItem("infill-intro-seen") === "1"; } catch {}
+    if (!seen) showIntro();
+  }
   let start = null;
   try { start = localStorage.getItem("infill-city"); } catch {}
   if (!CITY_INDEX.find((c) => c.slug === start)) start = CITY_INDEX[0]?.slug;

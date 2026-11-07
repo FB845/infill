@@ -177,6 +177,15 @@ main { position:relative; min-width:0; }
 .truth-row .tile { width:22px; height:22px; border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; }
 .truth-row.match .tile { background:var(--color-pass); } .truth-row.miss .tile { background:var(--color-fail); } .truth-row.new .tile { background:var(--color-unknown); }
 .empty { padding:var(--space-5); color:var(--color-muted); }
+.intro { width:min(640px, 100%); background:var(--color-panel); border-radius:var(--radius-lg); box-shadow:var(--shadow-float); padding:var(--space-6); }
+.intro h2 { margin:0 0 var(--space-2); font:800 24px/30px var(--font-display); }
+.intro p { margin:0 0 var(--space-4); }
+.intro-cols { display:grid; grid-template-columns:1fr 1fr; gap:var(--space-4); margin-bottom:var(--space-4); }
+.intro-cols ul { margin:var(--space-2) 0 0; padding:0; list-style:none; }
+.intro-cols li { display:grid; grid-template-columns:20px 1fr; gap:var(--space-2); padding:6px 0; border-top:1px solid var(--color-hairline); font-size:14px; line-height:20px; }
+.intro-cols .tile { width:20px; height:20px; border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; }
+.intro-cols .pass .tile { background:var(--color-pass); } .intro-cols .unknown .tile { background:var(--color-unknown); }
+@media (max-width:640px) { .intro-cols { grid-template-columns:1fr; } }
 /* Call sheet window */
 .modal-wrap { position:fixed; inset:0; z-index:3000; background:rgba(27,31,29,.45); display:flex; align-items:flex-start; justify-content:center; padding:4vh var(--space-4); overflow:auto; }
 .modal-wrap[hidden] { display:none; }
@@ -243,6 +252,7 @@ main { position:relative; min-width:0; }
       <div class="wordmark">
         <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true"><rect x="3" y="3" width="17" height="17" stroke="#1B1F1D" stroke-width="2"></rect><circle cx="20" cy="20" r="4.5" fill="#FFFFFF" stroke="#1B1F1D" stroke-width="2"></circle><circle cx="20" cy="20" r="1.3" fill="#1B1F1D"></circle></svg>
         <span>Infill</span>
+        <button type="button" id="hostedTag" class="tag screened" hidden style="margin-left:auto; cursor:pointer; border:0">Hosted demo · info</button>
       </div>
       <p class="tagline">Nonprofits find land by luck. Infill finds it on purpose.</p>
     </header>
@@ -288,6 +298,7 @@ main { position:relative; min-width:0; }
   </main>
 </div>
 <div id="modal" class="modal-wrap" hidden></div>
+<div id="intro" class="modal-wrap" hidden></div>
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="data/cities.js"></script>
 <script src="app.js"></script>
