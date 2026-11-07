@@ -68,6 +68,7 @@ details.filters[open] summary::after { content:"−"; }
 .list-row:hover { background:var(--color-paper); }
 .list-row.on { background:var(--color-paper-2); box-shadow:inset 0 0 0 2px var(--color-ink); }
 .plate { height:28px; display:flex; align-items:center; justify-content:center; background:var(--color-ink); color:#fff; font:600 14px/1 var(--font-mono); border-radius:var(--radius-sm); }
+.plate.checked { background:var(--color-panel); color:var(--color-ink); box-shadow:inset 0 0 0 1.5px var(--color-ink); font-size:12px; border-style:dashed; }
 .plate.surplus { background:var(--color-panel); color:var(--color-ink); box-shadow:inset 0 0 0 1.5px var(--color-ink); font-size:12px; }
 .list-row .plate { background:transparent; color:var(--color-muted); box-shadow:none; height:auto; align-self:start; justify-content:flex-start; padding-top:3px; font:500 13px/1.2 var(--font-mono); border-radius:0; }
 .list-row.on .plate { color:var(--color-ink); font-weight:600; }
@@ -127,6 +128,14 @@ main { position:relative; min-width:0; }
 .check-row.pass .tile { background:var(--color-pass); } .check-row.fail .tile { background:var(--color-fail); } .check-row.unknown .tile { background:var(--color-unknown); }
 .check-row b { font-weight:600; }
 .check-row .src { font:12px/17px var(--font-mono); color:var(--color-muted); }
+.pathway { border-top:1px solid var(--color-hairline); }
+.pathway summary { list-style:none; cursor:pointer; display:grid; grid-template-columns:auto 1fr auto; gap:var(--space-2); align-items:center; padding:10px 0; min-height:44px; }
+.pathway summary::-webkit-details-marker { display:none; }
+.pw-name { font:700 14px/1.2 var(--font-display); white-space:nowrap; }
+.pw-opens { font-size:13px; line-height:18px; color:var(--color-muted); }
+.pw-v { font:700 11px/1 var(--font-display); letter-spacing:.06em; text-transform:uppercase; padding:4px 7px; border-radius:var(--radius-sm); white-space:nowrap; }
+.pw-v.pass { background:var(--color-pass-tint); color:var(--color-pass); } .pw-v.fail { background:var(--color-fail-tint); color:var(--color-fail); } .pw-v.unknown { background:var(--color-unknown-tint); color:var(--color-muted); }
+.pathway[open] summary { padding-bottom:4px; }
 .group-label { margin:var(--space-3) 0 var(--space-1); }
 .actions { display:flex; gap:var(--space-2); flex-wrap:wrap; margin:var(--space-3) 0; }
 .btn { min-height:var(--control-h); padding:0 var(--space-4); border-radius:var(--radius-md); font:700 14px/1 var(--font-display); cursor:pointer; display:inline-flex; align-items:center; gap:var(--space-2); }
@@ -257,6 +266,11 @@ main { position:relative; min-width:0; }
       </div>
       <label class="check"><input type="checkbox" id="showSurplus" checked> Surplus public land notices</label>
       <label class="check"><input type="checkbox" id="showArchived" checked> Include archived notices (leads to re-check)</label>
+      <form class="field" id="checkForm" autocomplete="off">
+        <label class="label" for="checkAddr">Check any lot</label>
+        <div style="display:flex; gap:8px"><input class="input" id="checkAddr" placeholder="Street address in OC, or click the map"><button class="btn btn-ghost" type="submit">Check</button></div>
+        <span class="meta" id="checkMsg"></span>
+      </form>
       <details class="filters">
         <summary class="label">Must pass</summary>
         <div id="filters"></div>

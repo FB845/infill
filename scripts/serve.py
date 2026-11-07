@@ -11,9 +11,10 @@ or a local .env file (git-ignored). It is never sent to the browser.
 
 Usage:  python3 scripts/serve.py        then open http://localhost:8000
 """
-import http.server, json, os, sys, urllib.request, urllib.error
+import http.server, json, os, sys, urllib.parse, urllib.request, urllib.error
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 PIPELINE = os.path.join(ROOT, "pipeline.json")
 PORT = int(os.environ.get("PORT", "8000"))
 
@@ -117,6 +118,17 @@ class H(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/pipeline":
             data = json.load(open(PIPELINE)) if os.path.exists(PIPELINE) else {}
             return self.send_json(200, data)
+        if self.path.startswith("/api/check") or self.path.startswith("/api/geocode"):
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            try:
+                import check_parcel
+                if self.path.startswith("/api/geocode"):
+                    r = check_parcel.geocode(q.get("q", [""])[0])
+                    return self.send_json(200 if r else 404, r or {"error": "Address not found by the US Census Geocoder"})
+                r = check_parcel.check(float(q["lat"][0]), float(q["lng"][0]))
+                return self.send_json(404 if "error" in r else 200, r)
+            except Exception as e:
+                return self.send_json(502, {"error": f"Live check failed: {e}"})
         if self.path.startswith("/raw/") or self.path.startswith("/.env") or self.path.startswith("/.git"):
             return self.send_json(404, {"error": "not served"})
         return super().do_GET()

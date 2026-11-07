@@ -7,6 +7,12 @@
 **Lane:** 1 Find it
 **Built at:** Claude Impact Lab: UCI × SoCal Affordable Housing, November 7, 2026
 
+## Why this matters (from the challenge brief)
+
+Every affordable ownership home has to balance one equation: what the family can afford to pay, plus public subsidies, plus fundraising, minus the cost to create the home, equals $0. Land is the biggest line on that bill, and Lane 1 is about the cost of land. The brief's open question: the laws are public and the parcel data is public, so why does finding a site still come down to luck?
+
+Infill's answer: put the parcel data, the site tests from the laws, and what people find on the ground in one place, for every site in a city, with "unknown" wherever the data can't answer.
+
 ## The real user
 
 A one-person acquisitions lead at a small housing nonprofit in Orange County (the lane's scenario F02). They have no GIS team, and most of their sites still come from luck: a city calls about surplus land, or a congregation offers its parking lot. Cities already publish lists of sites they say can take new homes, but the lists are filed when the plan is adopted, so nobody knows which sites are still open, which are usable, and which one to call first.
@@ -28,6 +34,12 @@ A map of every adopted housing-element site in a city, from SCAG's regional laye
 | Room for lower-income homes? | Lower-income capacity the city itself listed | SCAG Housing Element Sites |
 
 **Surplus public land** (the brief's idea #3): HCD's Surplus Land Act notices are joined to the same map as their own layer, with the agency, size, zoning text, existing use, notice date and the same flood, fire and transit checks. The data is messy, as the brief warned: of 3,112 notices statewide, only 30 are marked Active and 3,081 are "Archive". All 22 notices in the four built-in cities are archived, so they are shown as leads to re-check, never as available land. Contact names and emails in the notices are not copied into the tool.
+
+**Pathways to check (laws to parcels).** Every card lists the land pathways the brief names (SB 4, AB 2011, SB 9, SB 684 / SB 1123, condo conversion). For each one, the site tests Infill can already answer are filled in with their source. For example, SB 4 excludes flood and fire zones, so those two tests pass or fail from the same checks. Everything else (ownership, fault zones, wetlands, historic districts, whether the zone is single-family or commercial) is marked unknown with what would settle it. A pathway is shown as a "lead" only when nothing checked rules it out. These are leads, never eligibility.
+
+**Check any lot.** Click anywhere on the map, or type a street address, and the local server checks that one lot live against the same public services (SCAG zoning and land use, OC building footprints, flood, fire, Caltrans transit areas) and says whether it's on the city's housing-element list. This is how to test a real case: any publicly listed small building or lot in OC. Addresses are geocoded with the US Census Geocoder and are not stored.
+
+**Moving before a market-rate buyer.** The brief asks whether a nonprofit can move first. Surplus public land is the one place the law gives affordable builders a head start: under the Surplus Land Act, agencies must offer surplus land for affordable housing before a general sale. Infill puts those notices on the same map.
 
 Each check is **pass**, **fail** or **unknown**. Unknown means the data was missing or the result is in a gray zone, and the tool says so instead of guessing. Sites are ranked with simple weights shown on screen, and every site card ends with "verify on the ground": confirm what is actually on the lot, who owns it and whether they'd sell, and check eligibility with the city.
 
@@ -103,6 +115,8 @@ The only key is the optional `ANTHROPIC_API_KEY`, read by the local server and n
 | Flood zones | [OC Floodplains](https://www.ocgis.com/arcpub/rest/services/Map_Layers/Floodplains/MapServer/0) (FEMA zones, county copy; `SFHA_TF = T` counts as a fail) | 2026-11-07 |
 | Fire zones | [OC Fire Hazard Severity Zones LRA](https://www.ocgis.com/arcpub/rest/services/Map_Layers/Fire_Hazard_Severity_Zones_LRA/MapServer/0) | 2026-11-07 |
 | Transit | [Caltrans CA HQ Transit Areas](https://caltrans-gis.dot.ca.gov/arcgis/rest/services/CHrailroad/CA_HQ_Transit_Areas/FeatureServer/0) | 2026-11-07 |
+| Laws in "Pathways to check" (SB 4, AB 2011, SB 9, SB 684 / SB 1123, condo conversion) and SB 4 / SB 9 exclusions | [Lane 1 brief](https://github.com/travcjohnson/claude-impact-lab-uci/blob/main/lanes/1-find-it/README.md), [HCD fact sheets](https://www.hcd.ca.gov/sites/default/files/docs/planning-and-community/housing-law-fact-sheets.pdf), [SB 4](https://www.hcd.ca.gov/sites/default/files/docs/planning-and-community/aff-hsg-faith-higher-ed-sb-4.pdf), [SB 9](https://www.hcd.ca.gov/sites/default/files/docs/planning-and-community/lot-splits-and-duplexes-sb-9.pdf) | 2026-11-07 |
+| Address lookup for "Check any lot" | [US Census Geocoder](https://geocoding.geo.census.gov/geocoder/) | 2026-11-07 |
 | AB 2097 (no minimum parking near major transit) | [HCD Technical Advisory](https://www.hcd.ca.gov/sites/default/files/docs/policy-and-research/ab-2097-ta.pdf) | 2026-11-07 |
 | Surplus public land notices | [HCD Surplus Land Act Notices of Availability](https://data.ca.gov/dataset/surplus-land-act-notices-of-availability-received) (data.ca.gov CSV) | 2026-11-07 |
 | Starting list of sources | [Lane 1 DATA-SOURCES.md](https://github.com/travcjohnson/claude-impact-lab-uci/blob/main/lanes/1-find-it/data/DATA-SOURCES.md) | 2026-11-07 |
@@ -126,6 +140,8 @@ Every number we made up is labelled ASSUMPTION here and in the tool.
 | Building vs. land value check | Partly working: code is in place, but only Santa Ana publishes values for free, and Santa Ana is missing from the site layer |
 | Ranking and top 10 | Working: our weights, shown on screen |
 | Call sheet | Working with an API key (Claude); template without one |
+| Pathways to check | Working: SB 4 flood and fire tests from data; all other law tests shown as unknown |
+| Check any lot (map click or address) | Working with the local server and internet access; tested offline against Anaheim site 01 (same result as the precomputed site) |
 | Rail and site-visit / survey log | Working: saved to `pipeline.json` (with the server) or the browser. Single-user; no logins |
 | Screen accuracy and error log | Working, but only as good as the visits logged. No real visits are in the repo |
 | Ownership, willingness to sell, utilities, contamination | Not built: shown as next steps on every card |
@@ -140,7 +156,11 @@ Every number we made up is labelled ASSUMPTION here and in the tool.
 - **A high-quality transit area is not the same as AB 2097's "major transit stop."** The card says "parking minimums may not apply" and asks the user to confirm.
 - **The capacity numbers are the city's own claims** from the 2025 housing element, not a feasibility study.
 - **Housing-element lists go stale.** That's why the "still available?" check exists, but only a site visit settles it.
-- **No ownership data.** The free county parcel layer has no owner field, so the tool can't say who to call yet.
+- **No ownership data.** The free county parcel layer has no owner field, so the tool can't say who to call yet, and SB 4's ownership test is always unknown.
+- **Pathways are mostly unscreened.** Only the SB 4 flood and fire exclusions are answered from data. Zoning-type tests (single-family for SB 9, commercial for AB 2011) need each city's zoning code meanings, and the statutes have more site tests than Infill checks.
+- **Not checked yet: slope, contamination, water and sewer capacity.** The brief lists all three. SCAG's layer has a slope field (zero for the sites we've seen), but its units aren't documented in the service, so Infill doesn't score it.
+- **No land-cost signal.** Land is the biggest line on the bill, but free assessed values exist only for Santa Ana, which isn't in the housing-element layer.
+- **"Check any lot" uses the lot's center** for flood, fire and transit, like the rest of the tool, and needs the local server with internet access.
 
 ## Next steps
 

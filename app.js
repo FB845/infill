@@ -52,7 +52,7 @@ const pill = (level, sm, word) => {
   const w = word || ({ high: "High conf.", medium: "Med conf.", low: "Low conf." }[level] || level);
   return `<span class="pill ${level} ${sm ? "sm" : ""}">${bars(level, c)}${w}</span>`;
 };
-const plateText = (p) => p.kind === "surplus" ? "SL" : String(p.rank).padStart(2, "0");
+const plateText = (p) => p.kind === "surplus" ? "SL" : (p.kind === "checked" ? "CK" : String(p.rank).padStart(2, "0"));
 const counts = (p) => {
   const n = { pass: 0, fail: 0, unknown: 0 };
   for (const c of p.checks || []) n[c.status]++;
@@ -61,7 +61,7 @@ const counts = (p) => {
 
 // ---------- city data ----------
 const CITY_INDEX = window.INFILL_CITY_INDEX || [];
-let city = null, meta = {}, sites = [], surplus = [], byId = {};
+let city = null, meta = {}, sites = [], surplus = [], checked = [], byId = {};
 function loadCity(slug) {
   return new Promise((resolve, reject) => {
     if (window.INFILL_CITIES?.[slug]) return resolve(window.INFILL_CITIES[slug]);
@@ -75,6 +75,7 @@ function loadCity(slug) {
 async function useCity(slug) {
   const d = await loadCity(slug);
   city = slug; meta = d.meta; sites = d.sites.features; surplus = (d.surplus || {}).features || [];
+  checked = [];
   byId = Object.fromEntries([...sites, ...surplus].map((f) => [f.properties.id, f]));
   gridSetup();
   selectedId = null; document.getElementById("card").style.display = "none";
@@ -187,6 +188,7 @@ function drawMap(ss, sp) {
   layer.clearLayers();
   const sel = selectedId && byId[selectedId];
   L.geoJSON({ type: "FeatureCollection", features: ss }, {
+    bubblingMouseEvents: false,
     style: (f) => ({ color: "#1A3C8F", weight: 2, fillColor: "#2450B8", fillOpacity: 0.4,
                      dashArray: peekStation(f.properties.id) === "dropped" ? "4 4" : null }),
     onEachFeature: (f, l) => {
@@ -196,6 +198,10 @@ function drawMap(ss, sp) {
       l.bindTooltip(`${plateText(f.properties)} · ${f.properties.label}`);
     },
   }).addTo(layer);
+  for (const f of checked) {
+    L.geoJSON(f, { bubblingMouseEvents: false, style: { color: "#1B1F1D", weight: f.properties.id === selectedId ? 3 : 2, dashArray: "6 4", fillColor: "#1B1F1D", fillOpacity: 0.12 },
+      onEachFeature: (ff, l) => { l.on("click", () => select(ff.properties.id)); l.bindTooltip(`CK · ${ff.properties.label}`); } }).addTo(layer);
+  }
   if (sel && sel.geometry.type !== "Point" && ss.includes(sel)) {
     L.geoJSON(sel, { style: { color: "#FFFFFF", weight: 7, fillOpacity: 0 }, interactive: false }).addTo(layer);
     L.geoJSON(sel, { style: { color: "#0E1F4D", weight: 3, fillColor: "#2450B8", fillOpacity: 0.55 }, interactive: false }).addTo(layer);
@@ -225,7 +231,7 @@ const isSaved = (id) => !!state[id]?.saved;
 function rowHTML(f) {
   const p = f.properties, st = peekStation(p.id), moved = st !== defaultStation(p.id);
   return `<button type="button" class="list-row ${p.id === selectedId ? "on" : ""}" data-id="${p.id}">
-    <span class="plate ${p.kind === "surplus" ? "surplus" : ""}">${plateText(p)}</span>
+    <span class="plate ${p.kind || ""}">${plateText(p)}</span>
     <span class="lr-main">
       <span class="lr-top"><span class="lr-apn">${esc(p.apn || p.label)}</span>${pill(p.confidence, true, { high: "High", medium: "Med", low: "Low" }[p.confidence])}${moved ? tag(st, true) : ""}${isSaved(p.id) ? `<span class="saved-mark" aria-label="Saved">${IC.star(true, "#1B1F1D")}</span>` : ""}</span>
       <span class="lr-sum">${esc(p.summary)}</span>
@@ -246,6 +252,7 @@ function renderList() {
     return;
   }
   list.innerHTML = (ss.length ? ss.slice(0, 300).map(rowHTML).join("") : '<div class="empty">No housing-element sites pass every selected check.</div>') +
+    (checked.length ? `<div class="label" style="padding:16px 12px 4px">Lots you checked · ${checked.length}</div>` + checked.map(rowHTML).join("") : "") +
     (sp.length ? `<div class="label" style="padding:16px 12px 4px">Surplus public land · ${sp.length}</div>` + sp.map(rowHTML).join("") : "") +
     `<div class="foot"><span class="label">Sources</span> · checked ${esc(meta.sources?.[0]?.checked || "?")}<br>` +
     (meta.sources || []).map((s) => `<a href="${s.url}" target="_blank" rel="noopener">${esc(s.name)}</a>`).join("<br>") +
@@ -258,7 +265,7 @@ function renderList() {
 // ---------- rail ----------
 function renderRail() {
   const el = document.getElementById("rail");
-  const all = [...sites, ...surplus];
+  const all = [...sites, ...surplus, ...checked];
   const tracked = all.filter((f) => peekStation(f.properties.id) !== "screened");
   const cols = STATIONS.filter(([k]) => k !== "screened");
   el.innerHTML = `<div class="pane-head"><h2>Rail · ${esc(meta.city || "")}</h2><span class="meta">${tracked.length} sites in play · move a ticket from its card · every move is logged with a reason</span></div>
@@ -360,8 +367,8 @@ function renderCard(id) {
   }).join("");
   const card = document.getElementById("card");
   card.innerHTML = `
-    <div class="card-head"><span class="plate ${p.kind === "surplus" ? "surplus" : ""}">${plateText(p)}</span>
-      <div><h2>${esc(p.kind === "surplus" ? p.label : (p.apn ? "APN " + p.apn : p.label))}</h2><div class="meta">${p.kind === "surplus" ? "Surplus public land notice" : "Housing-element site"}</div><div class="meta" style="white-space:nowrap">${facts}</div></div>
+    <div class="card-head"><span class="plate ${p.kind || ""}">${plateText(p)}</span>
+      <div><h2>${esc(p.kind === "surplus" ? p.label : (p.apn ? "APN " + p.apn : p.label))}</h2><div class="meta">${p.kind === "surplus" ? "Surplus public land notice" : (p.kind === "checked" ? "Lot you checked · live public data, " + esc(p.checked_at || "") : "Housing-element site")}</div><div class="meta" style="white-space:nowrap">${facts}</div></div>
       <button type="button" class="star-btn" id="saveCard" aria-pressed="${isSaved(id)}" aria-label="${isSaved(id) ? "Remove from saved" : "Save site"}">${IC.star(isSaved(id))}</button>
       <button type="button" class="icon-btn" id="closeCard" aria-label="Close site card" style="margin-left:0">${IC.close}</button></div>
     <div class="card-tags">${pill(p.confidence)}${tag(s.station)}<span class="gridref">${gridRef(byId[id])}</span></div>
@@ -387,6 +394,7 @@ function renderCard(id) {
     ${visits ? `<div class="label group-label">Visits</div><ul class="visits">${visits}</ul>` : ""}
     <div class="sec-head"><span class="label">Site checks</span><span class="meta">${n.pass} pass · ${n.fail} fail · ${n.unknown} unknown</span></div>
     ${checks}
+    ${pathwaysHTML(p)}
     ${assumptions ? `<div class="label group-label">Assumed (our thresholds, not law)</div><ul class="visits">${assumptions}</ul>` : ""}
     <div class="verify"><b>Next step: verify on the ground.</b> ${p.kind === "surplus" ? "Surplus notices can be withdrawn or already disposed of." : "Housing-element lists are filed when the plan is adopted, so a site may have sold or been built since."} Confirm what is actually on the lot (site visit or existing-conditions survey), who owns it and whether they would sell, and check eligibility with the city. Screening tool, not a zoning determination.</div>`;
   card.querySelector("#closeCard").onclick = () => { card.style.display = "none"; selectedId = null; renderAll(); };
@@ -407,15 +415,67 @@ function renderCard(id) {
   card.querySelector("#saveCard").onclick = () => toggleSave(id);
 }
 
+
+// ---------- pathways (leads, not eligibility) ----------
+// Each law has stacked site tests. Infill marks a test pass/fail only when a check it already
+// runs answers it; everything else stays "unknown" with what would settle it. Sources: the lane
+// brief (claude-impact-lab-uci, lanes/1-find-it) and the HCD fact sheets it links.
+const SRC_LANE = ["Lane 1 brief (law list and SB 4 / SB 9 exclusions)", "https://github.com/travcjohnson/claude-impact-lab-uci/blob/main/lanes/1-find-it/README.md"];
+const SRC_FACTS = ["HCD Housing Law Fact Sheets", "https://www.hcd.ca.gov/sites/default/files/docs/planning-and-community/housing-law-fact-sheets.pdf"];
+const SRC_SB9 = ["HCD fact sheet: SB 9", "https://www.hcd.ca.gov/sites/default/files/docs/planning-and-community/lot-splits-and-duplexes-sb-9.pdf"];
+const SRC_SB4 = ["HCD fact sheet: SB 4", "https://www.hcd.ca.gov/sites/default/files/docs/planning-and-community/aff-hsg-faith-higher-ed-sb-4.pdf"];
+function pathways(p) {
+  const chk = (name) => (p.checks || []).find((c) => c.test === name);
+  const z = p.zoning ? `zoning code ${p.zoning}` : "zoning unknown";
+  const fromCheck = (name, label, why) => {
+    const c = chk(name);
+    if (!c || c.status === "unknown") return { test: label, status: "unknown", detail: `${why}: not checked for this site` };
+    return { test: label, status: c.status, detail: c.detail, source: c.source, url: c.url };
+  };
+  const owner = { test: "Owned by a faith organization or nonprofit college", status: "unknown", detail: "No free owner data. Confirm with the County Assessor; worship-site maps and the IRS exempt-organizations file are leads, not facts" };
+  const list = [
+    { id: "SB4", name: "SB 4", opens: "Housing on faith and nonprofit-college land", src: SRC_SB4,
+      tests: [owner, fromCheck("Flood zone", "Not in a flood zone (SB 4 excludes flood zones)", "Flood zone"),
+              fromCheck("Fire hazard zone", "Not in a fire hazard zone (SB 4 excludes fire zones; local zones only)", "Fire zone"),
+              { test: "Not in a fault zone or wetland (also excluded)", status: "unknown", detail: "Not checked yet" }] },
+    { id: "AB2011", name: "AB 2011", opens: "Housing on commercial corridors", src: SRC_FACTS,
+      tests: [{ test: "Commercially zoned", status: "unknown", detail: `${z}: confirm with the city that it's a commercial zone` },
+              { test: "Other site tests in the statute", status: "unknown", detail: "Not screened yet: read the statute before relying on this" }] },
+    { id: "SB9", name: "SB 9", opens: "Lot splits and duplexes on single-family lots", src: SRC_SB9,
+      tests: [{ test: "Single-family lot", status: "unknown", detail: `${z}: confirm it's a single-family zone` },
+              { test: "Not in a historic district (SB 9 excludes them)", status: "unknown", detail: "Not checked yet" }] },
+    { id: "SB684", name: "SB 684 / SB 1123", opens: "Small-lot subdivisions of up to 10 homes without a hearing", src: SRC_FACTS,
+      tests: [{ test: "Lot size and zone limits", status: "unknown", detail: `${p.acres != null ? p.acres + " acres. " : ""}Limits differ by bill: cite the statute you use` }] },
+    { id: "CONDO", name: "Condo conversion", opens: "Converting existing apartments to ownership condos", src: SRC_LANE,
+      tests: [{ test: "Existing apartment building on the lot", status: "unknown", detail: "Not checked. Local condo-conversion rules apply" }] },
+  ];
+  for (const w of list) {
+    const st = w.tests.map((t) => t.status);
+    w.verdict = st.includes("fail") ? "ruled_out" : (st.includes("pass") ? "lead" : "unknown");
+  }
+  return list;
+}
+const VERDICT = { lead: ["Lead", "pass"], ruled_out: ["Ruled out by a site test", "fail"], unknown: ["Not screened yet", "unknown"] };
+function pathwaysHTML(p) {
+  return `<div class="sec-head"><span class="label">Pathways to check</span><span class="meta">leads, not eligibility</span></div>` +
+    pathways(p).map((w) => `<details class="pathway"><summary><span class="pw-name">${esc(w.name)}</span><span class="pw-opens">${esc(w.opens)}</span>
+      <span class="pw-v ${VERDICT[w.verdict][1]}">${VERDICT[w.verdict][0]}</span></summary>
+      <div class="checks">${w.tests.map((t) => `<div class="check-row ${t.status}"><span class="tile" role="img" aria-label="${STATUS_WORD[t.status]}">${IC[t.status]()}</span><div><b>${esc(t.test)}</b>: ${esc(t.detail)}
+        ${t.url ? `<div class="src"><a href="${t.url}" target="_blank" rel="noopener">${esc(t.source)} ↗</a></div>` : ""}</div></div>`).join("")}
+      <div class="src" style="padding:6px 0 2px"><a href="${w.src[1]}" target="_blank" rel="noopener">${esc(w.src[0])} ↗</a></div></div></details>`).join("") +
+    `<div class="meta" style="margin-top:6px">A lead means no checked test rules it out yet. Confirm every test with the city and the statute before acting.</div>`;
+}
+
 // ---------- call sheet ----------
 const callCache = {};
 function siteForClaude(p) {
   const s = siteState(p.id);
-  return { kind: p.kind === "surplus" ? "surplus public land notice" : "adopted housing-element site", city: p.city, label: p.label, apn: p.apn, acres: p.acres,
+  return { kind: p.kind === "surplus" ? "surplus public land notice" : (p.kind === "checked" ? "parcel checked live by the user (may not be on any list)" : "adopted housing-element site"), city: p.city, label: p.label, apn: p.apn, acres: p.acres,
            zoning_code: p.zoning, scag_zoning_category: p.zoning_scag, scag_land_use_code: p.landuse_code, agency: p.agency, existing_use: p.existing_use,
            notice_status: p.status_text, lower_income_capacity_listed: p.low_income_capacity, total_capacity_listed: p.total_capacity,
            rank: p.rank, summary: p.summary,
            checks: p.checks.map((c) => ({ question: c.group, test: c.test, status: c.status, detail: c.detail, source: c.source })),
+           pathways_to_check: pathways(p).map((w) => ({ law: w.name, opens: w.opens, status: VERDICT[w.verdict][0], tests: w.tests.map((t) => `${t.test}: ${t.status}`) })),
            assumptions: p.assumptions, site_visits: s.visits.map((v) => ({ date: v.date, found: (FOUND.find((x) => x[0] === v.found) || [])[1], survey: v.survey ? v.survey.method : null })),
            data_pulled: meta.pulled };
 }
@@ -470,9 +530,9 @@ function renderModal(id) {
                                       : { label: "Lower-income homes listed", v: String(p.low_income_capacity ?? "?") };
   modalEl.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-title">
     <div class="m-head">
-      <span class="plate ${p.kind === "surplus" ? "surplus" : ""}">${plateText(p)}</span>
+      <span class="plate ${p.kind || ""}">${plateText(p)}</span>
       <div><h2 id="m-title">${esc(ref)}</h2>
-        <div class="meta">Call sheet · ${p.kind === "surplus" ? "Surplus public land notice" : "Housing-element site"} · ${esc(p.city)} · ${gridRef(f)}</div>
+        <div class="meta">Call sheet · ${p.kind === "surplus" ? "Surplus public land notice" : (p.kind === "checked" ? "Lot you checked" : "Housing-element site")} · ${esc(p.city)} · ${gridRef(f)}</div>
         <div class="card-tags" style="margin:10px 0 0">${pill(p.confidence)}${tag(s.station)}</div></div>
       <div class="m-head-actions no-print">
         <button type="button" class="star-btn" id="m-save" aria-pressed="${isSaved(id)}" aria-label="${isSaved(id) ? "Remove from saved" : "Save site"}">${IC.star(isSaved(id))}</button>
@@ -585,6 +645,41 @@ function renderSaved() {
   const csvB = el.querySelector("#sv-csv"); if (csvB) csvB.onclick = () => downloadCSV(items.map((x) => siteRecord(x.id)), "infill-saved-sites.csv");
   const prB = el.querySelector("#sv-print"); if (prB) prB.onclick = () => printAs("print-saved");
 }
+
+
+// ---------- check any lot (live, via scripts/serve.py) ----------
+const checkMsg = (t) => (document.getElementById("checkMsg").textContent = t || "");
+async function checkAt(lat, lng, label) {
+  if (!server) { checkMsg("Live checks need the local server: run python3 scripts/serve.py"); return; }
+  checkMsg(`Checking ${label || "this lot"} against live public data…`);
+  try {
+    const r = await fetch(`/api/check?lat=${lat}&lng=${lng}`), j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.status);
+    const id = j.properties.id;
+    if (!byId[id]) { checked.unshift(j); byId[id] = j; }
+    checkMsg(`Checked ${j.properties.label}${j.properties.city ? " · " + j.properties.city : ""}`);
+    view = "map"; select(id, true);
+  } catch (e) { checkMsg(`Couldn't check: ${e.message}`); }
+}
+map.on("click", (e) => {
+  if (view !== "map") return;
+  const btn = document.createElement("button");
+  btn.className = "btn btn-ghost btn-sm"; btn.type = "button"; btn.textContent = "Check this lot";
+  btn.onclick = () => { map.closePopup(); checkAt(e.latlng.lat.toFixed(6), e.latlng.lng.toFixed(6)); };
+  L.popup({ closeButton: false }).setLatLng(e.latlng).setContent(btn).openOn(map);
+});
+document.getElementById("checkForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const q = document.getElementById("checkAddr").value.trim();
+  if (!q) return;
+  if (!server) { checkMsg("Address checks need the local server: run python3 scripts/serve.py"); return; }
+  checkMsg("Finding the address…");
+  try {
+    const r = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`), j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.status);
+    await checkAt(j.lat, j.lng, j.matched);
+  } catch (err) { checkMsg(`Couldn't find it: ${err.message}`); }
+};
 
 // ---------- start ----------
 (async () => {
