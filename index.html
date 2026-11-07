@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Infill — finding buildable land on purpose</title>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<style>
+  :root { --bg:#f6f5f2; --panel:#fff; --ink:#1b1b1b; --muted:#6b6b6b; --line:#e3e1dc;
+          --high:#1f7a4d; --med:#c98a14; --low:#9a9a9a; --accent:#1b1b1b; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--ink);
+              font:14px/1.45 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; }
+  .app { display:grid; grid-template-columns:380px 1fr; height:100vh; }
+  aside { background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0; }
+  header { padding:18px 20px 12px; border-bottom:1px solid var(--line); }
+  h1 { font-size:20px; margin:0; letter-spacing:-.01em; }
+  .tag { color:var(--muted); margin:2px 0 0; }
+  .filters { padding:12px 20px; border-bottom:1px solid var(--line); display:grid; gap:6px; }
+  .filters label { display:flex; gap:8px; align-items:center; cursor:pointer; }
+  .count { padding:10px 20px; color:var(--muted); border-bottom:1px solid var(--line); }
+  .list { overflow:auto; flex:1; }
+  .item { padding:12px 20px; border-bottom:1px solid var(--line); cursor:pointer; }
+  .item:hover, .item.on { background:#f1f0ec; }
+  .item b { display:block; }
+  .meta { color:var(--muted); font-size:12px; }
+  .pill { display:inline-block; font-size:11px; padding:1px 7px; border-radius:99px; color:#fff; margin-right:6px; }
+  .pill.high{background:var(--high)} .pill.medium{background:var(--med)} .pill.low{background:var(--low)}
+  #map { height:100vh; }
+  .card { position:absolute; right:16px; top:16px; width:360px; max-height:calc(100vh - 32px); overflow:auto;
+          background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px;
+          box-shadow:0 6px 24px rgba(0,0,0,.08); z-index:1000; display:none; }
+  .card h2 { font-size:16px; margin:0 0 4px; }
+  .card h3 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:14px 0 6px; }
+  .card ul { margin:0; padding-left:18px; }
+  .card li { margin:4px 0; }
+  .card a { color:inherit; }
+  .verify { background:#f6f5f2; border-radius:8px; padding:10px 12px; margin-top:12px; font-size:13px; }
+  .close { float:right; border:0; background:none; font-size:18px; cursor:pointer; color:var(--muted); }
+  .empty { padding:20px; color:var(--muted); }
+  @media (max-width:800px){ .app{grid-template-columns:1fr; grid-template-rows:45vh 55vh} #map{height:55vh} aside{order:2} .card{width:auto; left:16px} }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <header>
+      <h1>Infill</h1>
+      <p class="tag">Nonprofits find land by luck. Infill finds it on purpose.</p>
+    </header>
+    <div class="filters" id="filters"></div>
+    <div class="count" id="count"></div>
+    <div class="list" id="list"></div>
+  </aside>
+  <main style="position:relative">
+    <div id="map"></div>
+    <div class="card" id="card"></div>
+  </main>
+</div>
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="data/sites.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
