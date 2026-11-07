@@ -77,9 +77,15 @@ async function useCity(slug) {
   byId = Object.fromEntries([...sites, ...surplus].map((f) => [f.properties.id, f]));
   gridSetup();
   selectedId = null; document.getElementById("card").style.display = "none";
-  map.setView(meta.center, meta.zoom || 13);
   try { localStorage.setItem("infill-city", slug); } catch {}
   renderAll();
+  fitToPins();
+}
+function fitToPins() {
+  const fs = [...shownSites(), ...shownSurplus()];
+  if (!fs.length) { map.setView(meta.center, meta.zoom || 13); return; }
+  const b = L.geoJSON({ type: "FeatureCollection", features: fs }).getBounds();
+  map.fitBounds(b, { paddingTopLeft: [60, 60], paddingBottomRight: [60, 60], maxZoom: 15 });
 }
 
 // Grid reference on our own 8x8 grid over the city's sites (Thomas Guide style, not Thomas Guide pages)
@@ -163,7 +169,7 @@ for (const [k, label] of Object.entries(FLAGS)) {
 document.querySelectorAll(".segmented button").forEach((b) => (b.onclick = () => {
   topOnly = b.dataset.top === "1";
   document.querySelectorAll(".segmented button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
-  renderAll();
+  renderAll(); fitToPins();
 }));
 document.getElementById("showSurplus").onchange = (e) => { showSurplus = e.target.checked; renderAll(); };
 document.getElementById("showArchived").onchange = (e) => { showArchived = e.target.checked; renderAll(); };
@@ -180,12 +186,12 @@ function drawMap(ss, sp) {
   layer.clearLayers();
   const sel = selectedId && byId[selectedId];
   L.geoJSON({ type: "FeatureCollection", features: ss }, {
-    style: (f) => ({ color: "#1A3C8F", weight: 1.5, fillColor: "#2450B8", fillOpacity: 0.35,
+    style: (f) => ({ color: "#1A3C8F", weight: 2, fillColor: "#2450B8", fillOpacity: 0.4,
                      dashArray: peekStation(f.properties.id) === "dropped" ? "4 4" : null }),
     onEachFeature: (f, l) => {
       l.on("click", () => select(f.properties.id));
-      l.on("mouseover", () => l.setStyle({ weight: 2, fillOpacity: 0.45 }));
-      l.on("mouseout", () => l.setStyle({ weight: 1.5, fillOpacity: 0.35 }));
+      l.on("mouseover", () => l.setStyle({ weight: 2.5, fillOpacity: 0.5 }));
+      l.on("mouseout", () => l.setStyle({ weight: 2, fillOpacity: 0.4 }));
       l.bindTooltip(`${plateText(f.properties)} · ${f.properties.label}`);
     },
   }).addTo(layer);
@@ -193,10 +199,23 @@ function drawMap(ss, sp) {
     L.geoJSON(sel, { style: { color: "#FFFFFF", weight: 7, fillOpacity: 0 }, interactive: false }).addTo(layer);
     L.geoJSON(sel, { style: { color: "#0E1F4D", weight: 3, fillColor: "#2450B8", fillOpacity: 0.55 }, interactive: false }).addTo(layer);
   }
+  // Pins: lot outlines are too small to see at city zoom, so every site also gets a pin.
+  // Top 10 get numbered rank plates; the rest get small dots so big cities stay readable.
+  for (const f of ss) {
+    const p = f.properties, c = L.geoJSON(f).getBounds().getCenter();
+    const on = p.id === selectedId, dropped = peekStation(p.id) === "dropped";
+    const plate = p.top || ss.length <= 25;
+    const icon = plate
+      ? L.divIcon({ className: "", html: `<div class="rank-pin ${on ? "on" : ""} ${dropped ? "dropped" : ""}">${plateText(p)}</div>`, iconSize: [30, 24], iconAnchor: [15, 12] })
+      : L.divIcon({ className: "", html: `<div class="dot-pin ${on ? "on" : ""} ${dropped ? "dropped" : ""}"></div>`, iconSize: on ? [16, 16] : [12, 12], iconAnchor: on ? [8, 8] : [6, 6] });
+    L.marker(c, { icon, keyboard: true, title: `${plateText(p)} · ${p.label}`, zIndexOffset: on ? 2000 : (plate ? 1000 - (p.rank || 0) : 0) })
+      .on("click", () => select(p.id)).bindTooltip(`${plateText(p)} · ${p.label}`, { direction: "top", offset: [0, -10] }).addTo(layer);
+  }
   for (const f of sp) {
-    const p = f.properties, [lng, lat] = f.geometry.coordinates;
-    const icon = L.divIcon({ className: "", html: `<div class="surplus-pin ${p.active ? "" : "archived"} ${p.id === selectedId ? "on" : ""}"></div>`, iconSize: [16, 16], iconAnchor: [8, 8] });
-    L.marker([lat, lng], { icon, keyboard: true, title: p.label }).on("click", () => select(p.id)).bindTooltip(`SL · ${p.label}`).addTo(layer);
+    const p = f.properties, [lng, lat] = f.geometry.coordinates, on = p.id === selectedId;
+    const icon = L.divIcon({ className: "", html: `<div class="surplus-pin ${p.active ? "" : "archived"} ${on ? "on" : ""}"></div>`, iconSize: [18, 18], iconAnchor: [9, 9] });
+    L.marker([lat, lng], { icon, keyboard: true, title: `SL · ${p.label}`, zIndexOffset: on ? 2000 : 500 })
+      .on("click", () => select(p.id)).bindTooltip(`SL · ${p.label}${p.active ? "" : " · archived"}`, { direction: "top", offset: [0, -10] }).addTo(layer);
   }
 }
 
