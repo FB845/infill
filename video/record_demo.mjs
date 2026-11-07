@@ -22,7 +22,10 @@ const marks = [];
 // Launch first, so a missing browser fails before anything is touched.
 const health = await (await fetch(URL + "api/health")).json();
 console.log("server:", health);
-const browser = await chromium.launch();
+// Prefer the Google Chrome already installed; fall back to Playwright's own Chromium.
+let browser;
+try { browser = await chromium.launch({ channel: "chrome" }); console.log("using installed Google Chrome"); }
+catch { browser = await chromium.launch(); console.log("using Playwright Chromium"); }
 // Back up the team's notes to a file, record on a clean slate, then always put them back.
 const backup = await (await fetch(URL + "api/pipeline")).json();
 const backupFile = path.join(OUT, `pipeline-backup-${Date.now()}.json`);
