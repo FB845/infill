@@ -9,9 +9,9 @@
 
 ## Why I built this
 
-I'm from Pasadena. In January 2025 the Eaton Fire burned through Altadena, right next door, and destroyed thousands of homes. Watching the rebuild, I kept seeing the same gap this lane describes: the rules and the parcel data are public, but every rebuild, ADU or conversion still starts with a question public data can't answer. What is actually there?
+I'm from Pasadena. In January 2025 the Eaton Fire burned through Altadena, right next door, and destroyed thousands of homes, including those of people I know, some directly and some through friends. Watching the rebuild, I kept seeing the same gap this lane describes: the rules and the parcel data are public, but every rebuild, ADU or conversion still starts with a question public data can't answer. What is actually there?
 
-That question is my day job. At [TraceHaus](https://trace.haus), a 3D scanning and design-engineering studio in Pasadena, our As-Built service turns 3D scans into existing-conditions drawings for garage-to-ADU conversions, legalizing unpermitted units and fire-damaged structures across LA County. Alongside it, Project Ground Truth is our ongoing work on checking AI output against the physical world, with rubrics, error logs and measured verification.
+That question is my day job. At [TraceHaus](https://trace.haus), a 3D scanning and design-engineering studio in Pasadena, our [As-Built](https://asbuilt.trace.haus/) service turns 3D scans into existing-conditions drawings for garage-to-ADU conversions, legalizing unpermitted units and fire-damaged structures across LA County. Alongside it, Project Ground Truth is our ongoing work on checking AI output against the physical world, with rubrics, error logs and measured verification.
 
 Infill applies the same loop to land: screen the public data, draft the next step with Claude, verify on the ground, and log what the data got wrong. The Ground truth tab is that loop. Next for it: a fire-rebuild mode starting with Altadena, ADU-ready lots, and existing-conditions surveys as the first step from a screened site to a permit set (see [ROADMAP.md](ROADMAP.md)).
 
