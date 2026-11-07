@@ -117,18 +117,18 @@ def check(lat, lng):
         """Fallback: the city-wide copy fetch_data.py already downloaded (raw/<city>/<layer>.geojson)."""
         layer = {"flood": "flood", "fire": "fire_lra", "hqta": "hqta"}[key]
         for path in sorted(glob.glob(os.path.join(B.RAW, "*", f"{layer}.geojson"))):
-            fc = B.load(os.path.relpath(path, B.RAW))
-            feats = (fc or {}).get("features", [])
-            if not feats:
+            d = os.path.dirname(path)
+            sites = B.load(os.path.relpath(os.path.join(d, "he_sites.geojson"), B.RAW))
+            if not sites or not sites.get("features"):
                 continue
-            try:
-                xs, ys = zip(*[xy for f in feats for poly in B.polys(f.get("geometry")) for xy in poly[0]])
-            except ValueError:
+            # the area fetch_data.py downloaded this layer for: the city's sites plus the same padding
+            from fetch_data import bbox as _bbox
+            x0, y0, x1, y1 = _bbox(sites["features"])
+            if not (x0 <= pt[0] <= x1 and y0 <= pt[1] <= y1):
                 continue
-            if min(xs) <= pt[0] <= max(xs) and min(ys) <= pt[1] <= max(ys):
-                day = (open(os.path.join(os.path.dirname(path), "FETCHED_AT.txt")).read().strip()[:10]
-                       if os.path.exists(os.path.join(os.path.dirname(path), "FETCHED_AT.txt")) else "date unknown")
-                return B.hits(pt, B.index(fc)), day
+            fc = B.load(os.path.relpath(path, B.RAW)) or {"features": []}
+            day = (open(os.path.join(d, "FETCHED_AT.txt")).read().strip()[:10] if os.path.exists(os.path.join(d, "FETCHED_AT.txt")) else "date unknown")
+            return B.hits(pt, B.index(fc)), day
         return None, None
     def hz(key, test, src, fail_if_hit, hit_detail, miss_detail):
         feats, note = R[key], ""
