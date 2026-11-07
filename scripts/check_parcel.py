@@ -5,7 +5,7 @@ Runs the same checks as build_sites.py on one parcel, straight from the public s
 SCAG zoning (parcel outline, APN, zoning), SCAG existing land use, SCAG housing-element sites,
 OC building footprints, OC floodplains, OC fire zones (LRA) and Caltrans HQTA.
 Never requests owner names or mailing addresses."""
-import json, math, os, sys, time, urllib.parse, urllib.request
+import glob, json, math, os, sys, time, urllib.parse, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from fetch_data import LAYERS, rings_of  # noqa: E402
@@ -113,13 +113,33 @@ def check(lat, lng):
         checks.append({"group": "Still available?", "test": "Building coverage", "status": st, "detail": f"Buildings cover about {cov*100:.0f}% of the lot (estimate)", "source": S["footprints"][0], "url": S["footprints"][1]})
         assumptions.append(f"ASSUMPTION: under {int(B.COVER_OPEN*100)}% coverage = mostly open; over {int(B.COVER_BUILT*100)}% = may be built out")
     # Usable? flood, fire, transit (center of the lot)
+    def cached_hits(key, pt):
+        """Fallback: the city-wide copy fetch_data.py already downloaded (raw/<city>/<layer>.geojson)."""
+        layer = {"flood": "flood", "fire": "fire_lra", "hqta": "hqta"}[key]
+        for path in sorted(glob.glob(os.path.join(B.RAW, "*", f"{layer}.geojson"))):
+            fc = B.load(os.path.relpath(path, B.RAW))
+            feats = (fc or {}).get("features", [])
+            if not feats:
+                continue
+            try:
+                xs, ys = zip(*[xy for f in feats for poly in B.polys(f.get("geometry")) for xy in poly[0]])
+            except ValueError:
+                continue
+            if min(xs) <= pt[0] <= max(xs) and min(ys) <= pt[1] <= max(ys):
+                day = (open(os.path.join(os.path.dirname(path), "FETCHED_AT.txt")).read().strip()[:10]
+                       if os.path.exists(os.path.join(os.path.dirname(path), "FETCHED_AT.txt")) else "date unknown")
+                return B.hits(pt, B.index(fc)), day
+        return None, None
     def hz(key, test, src, fail_if_hit, hit_detail, miss_detail):
-        feats = R[key]
+        feats, note = R[key], ""
         if feats is None:
-            checks.append({"group": "Usable?", "test": test, "status": "unknown", "detail": "Service didn't answer in time: try again", "source": S[src][0], "url": S[src][1]}); return
+            feats, day = cached_hits(key, (lng0, lat0))
+            if feats is None:
+                checks.append({"group": "Usable?", "test": test, "status": "unknown", "detail": "Service didn't answer in time and no cached copy covers this lot: try again", "source": S[src][0], "url": S[src][1]}); return
+            note = f" (live service didn't answer; checked against the copy downloaded {day})"
         hit = feats if key != "flood" else [x for x in feats if str(x["properties"].get("SFHA_TF")).upper() == "T"]
         st = ("fail" if hit else "pass") if fail_if_hit else ("pass" if hit else "fail")
-        checks.append({"group": "Usable?", "test": test, "status": st, "detail": hit_detail(hit) if hit else miss_detail, "source": S[src][0], "url": S[src][1]})
+        checks.append({"group": "Usable?", "test": test, "status": st, "detail": (hit_detail(hit) if hit else miss_detail) + note, "source": S[src][0], "url": S[src][1]})
     zones = lambda hit, f: ", ".join(sorted({str(x["properties"].get(f)) for x in hit}))
     hz("flood", "Flood zone", "flood", True, lambda h: f"Lot center is in a special flood hazard area (zone {zones(h, 'FLD_ZONE')})", "Lot center is not in a mapped special flood hazard area")
     hz("fire", "Fire hazard zone", "fire", True, lambda h: f"Lot center is in a fire hazard severity zone: {zones(h, 'HAZ_CLASS')}", "Not in a mapped local-responsibility fire zone (state-responsibility zones not checked)")
