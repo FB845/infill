@@ -373,6 +373,8 @@ function renderCard(id) {
       <button type="button" class="icon-btn" id="closeCard" aria-label="Close site card" style="margin-left:0">${IC.close}</button></div>
     <div class="card-tags">${pill(p.confidence)}${tag(s.station)}<span class="gridref">${gridRef(byId[id])}</span></div>
     <p>${esc(p.summary)}</p>
+    ${p.snap_note ? `<div class="verify" style="margin:0 0 10px"><b>Nearest parcel.</b> ${esc(p.snap_note)}</div>` : ""}
+    ${p.address ? `<div class="meta" style="margin-bottom:6px">Address checked: ${esc(p.address)} (US Census Geocoder)</div>` : ""}
     ${extra ? `<div class="meta" style="margin-bottom:8px">${extra}</div>` : ""}
     <div class="actions"><button type="button" id="callBtn" class="btn btn-primary">Open call sheet${claudeOn ? " · Claude" : ""}</button>
       <button type="button" id="visitBtn" class="btn btn-ghost">Log site visit / survey</button></div>
@@ -649,13 +651,14 @@ function renderSaved() {
 
 // ---------- check any lot (live, via scripts/serve.py) ----------
 const checkMsg = (t) => (document.getElementById("checkMsg").textContent = t || "");
-async function checkAt(lat, lng, label) {
+async function checkAt(lat, lng, label, address) {
   if (!server) { checkMsg("Live checks need the local server: run python3 scripts/serve.py"); return; }
   checkMsg(`Checking ${label || "this lot"} against live public data…`);
   try {
     const r = await fetch(`/api/check?lat=${lat}&lng=${lng}`), j = await r.json();
     if (!r.ok) throw new Error(j.error || r.status);
     const id = j.properties.id;
+    if (address) j.properties.address = address;
     if (!byId[id]) { checked.unshift(j); byId[id] = j; }
     checkMsg(`Checked ${j.properties.label}${j.properties.city ? " · " + j.properties.city : ""}`);
     view = "map"; select(id, true);
@@ -677,7 +680,7 @@ document.getElementById("checkForm").onsubmit = async (e) => {
   try {
     const r = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`), j = await r.json();
     if (!r.ok) throw new Error(j.error || r.status);
-    await checkAt(j.lat, j.lng, j.matched);
+    await checkAt(j.lat, j.lng, j.matched, j.matched);
   } catch (err) { checkMsg(`Couldn't find it: ${err.message}`); }
 };
 

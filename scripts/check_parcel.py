@@ -5,7 +5,7 @@ Runs the same checks as build_sites.py on one parcel, straight from the public s
 SCAG zoning (parcel outline, APN, zoning), SCAG existing land use, SCAG housing-element sites,
 OC building footprints, OC floodplains, OC fire zones (LRA) and Caltrans HQTA.
 Never requests owner names or mailing addresses."""
-import json, os, sys, time, urllib.parse, urllib.request
+import json, math, os, sys, time, urllib.parse, urllib.request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from fetch_data import LAYERS, call, rings_of  # noqa: E402
 import build_sites as B  # noqa: E402
@@ -31,9 +31,23 @@ def geocode(q):
 def check(lat, lng):
     day = time.strftime("%Y-%m-%d")
     S = B.SRC
-    z = _point_query(LAYERS["zoning"], lng, lat, "PID24,APN24,CITY,ACRES,SLOPE,ZN24_CITY,ZN24_SCAG,YEAR_ZN", geometry=True)
+    fields = "PID24,APN24,CITY,ACRES,SLOPE,ZN24_CITY,ZN24_SCAG,YEAR_ZN"
+    z = _point_query(LAYERS["zoning"], lng, lat, fields, geometry=True)
+    snapped_m = None
     if not z:
-        return {"error": "No parcel found at that point in SCAG's Orange County zoning layer."}
+        # Geocoded addresses often land in the street. Look for the nearest parcel within ~50 m.
+        for d in (0.00025, 0.0005):
+            cand = call(LAYERS["zoning"] + "/query", {
+                "geometry": f"{lng - d},{lat - d},{lng + d},{lat + d}", "geometryType": "esriGeometryEnvelope", "inSR": 4326,
+                "spatialRel": "esriSpatialRelIntersects", "outFields": fields, "returnGeometry": "true", "outSR": 4326,
+                "f": "geojson", "geometryPrecision": 6}).get("features", [])
+            cand = [f for f in cand if f.get("geometry") and B.centroid(f["geometry"])]
+            if cand:
+                kx, ky = 111320 * math.cos(math.radians(lat)), 110540
+                dist = lambda f: math.hypot((B.centroid(f["geometry"])[0] - lng) * kx, (B.centroid(f["geometry"])[1] - lat) * ky)
+                best = min(cand, key=dist); z = [best]; snapped_m = round(dist(best)); break
+    if not z:
+        return {"error": "No parcel found at or near that point in SCAG's Orange County zoning layer. Zoom in and click inside the lot."}
     parcel = z[0]; g = parcel["geometry"]; zp = parcel["properties"]
     pid = zp.get("PID24")
     lu = call(LAYERS["landuse"] + "/query", {"where": f"PID24='{pid}'", "outFields": "LU24,YEAR", "returnGeometry": "false", "f": "json"}).get("features", [])
@@ -93,7 +107,9 @@ def check(lat, lng):
         "landuse_code": lu.get("LU24"), "slope": zp.get("SLOPE"), "low_income_capacity": low, "total_capacity": tot,
         "coverage": None if cov is None else round(cov, 3), "checks": checks, "assumptions": assumptions,
         "confidence": "high" if unknowns == 0 else ("medium" if unknowns == 1 else "low"), "summary": summary,
-        "flags": {"open": open_flag}, "checked_at": day, "rank": None, "top": False}}
+        "flags": {"open": open_flag}, "checked_at": day, "rank": None, "top": False,
+        "snapped_m": snapped_m,
+        "snap_note": (f"The point fell outside any parcel; this is the nearest parcel (its center is about {snapped_m} m away). Check it's the right lot." if snapped_m is not None else None)}}
 
 if __name__ == "__main__":
     print(json.dumps(check(float(sys.argv[1]), float(sys.argv[2])), indent=1)[:3000])
