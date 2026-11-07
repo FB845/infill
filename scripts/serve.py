@@ -151,7 +151,7 @@ class H(http.server.SimpleHTTPRequestHandler):
             return self.send_json(502, {"error": f"Call sheet failed: {e}"})
 
     def log_message(self, fmt, *a):
-        if "/api/" in (a[0] if a else ""):
+        if a and "/api/" in str(a[0]):
             sys.stderr.write("%s\n" % (fmt % a))
 
 if __name__ == "__main__":
