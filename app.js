@@ -687,6 +687,7 @@ document.getElementById("checkForm").onsubmit = async (e) => {
 // ---------- start ----------
 (async () => {
   await loadState();
+  if (!server) checkMsg("Hosted demo: live lot checks and Claude call sheets run in the local version (github.com/FB845/infill). Notes save in this browser.");
   let start = null;
   try { start = localStorage.getItem("infill-city"); } catch {}
   if (!CITY_INDEX.find((c) => c.slug === start)) start = CITY_INDEX[0]?.slug;
