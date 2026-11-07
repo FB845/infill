@@ -19,17 +19,21 @@ let VOICE = [];
 try { VOICE = JSON.parse(fs.readFileSync(path.join(OUT, "voice", "manifest.json"), "utf8")).clips.map((c) => c.seconds || 0); console.log("pacing to voiceover:", VOICE.map((x) => x.toFixed(1)).join(", ")); } catch { console.log("no voiceover manifest: default pacing"); }
 const marks = [];
 
-// Back up the team's notes, record on a clean slate, then put them back.
-const backup = await (await fetch(URL + "api/pipeline")).json();
+// Launch first, so a missing browser fails before anything is touched.
 const health = await (await fetch(URL + "api/health")).json();
 console.log("server:", health);
-await fetch(URL + "api/pipeline", { method: "PUT", headers: { "Content-Type": "application/json" }, body: "{}" });
-
 const browser = await chromium.launch();
-const ctx = await browser.newContext({ viewport: { width: W, height: H }, recordVideo: { dir: OUT, size: { width: W, height: H } } });
-const page = await ctx.newPage();
-const t0 = Date.now();
+// Back up the team's notes to a file, record on a clean slate, then always put them back.
+const backup = await (await fetch(URL + "api/pipeline")).json();
+const backupFile = path.join(OUT, `pipeline-backup-${Date.now()}.json`);
+fs.writeFileSync(backupFile, JSON.stringify(backup, null, 1));
+console.log("team notes backed up to", backupFile);
+let ctx, page, t0 = Date.now();
 try {
+  await fetch(URL + "api/pipeline", { method: "PUT", headers: { "Content-Type": "application/json" }, body: "{}" });
+  ctx = await browser.newContext({ viewport: { width: W, height: H }, recordVideo: { dir: OUT, size: { width: W, height: H } } });
+  page = await ctx.newPage();
+  t0 = Date.now();
   await page.addInitScript(() => { try { localStorage.setItem("infill-city", "anaheim"); } catch {} });
   await page.goto(URL);
   await page.waitForSelector(".list-row");
@@ -167,9 +171,10 @@ try {
   await wait(1200); await hold(5); await wait(1200);
   fs.writeFileSync(path.join(OUT, "timing.json"), JSON.stringify({ keepFrom, marks, total: (Date.now() - t0) / 1000 }, null, 1));
 } finally {
-  const v = page.video();
-  await ctx.close();
+  await fetch(URL + "api/pipeline", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(backup) })
+    .then(() => console.log("team notes restored")).catch((e) => console.error("RESTORE FAILED, notes are in", backupFile, e));
+  const v = page?.video();
+  if (ctx) await ctx.close();
   await browser.close();
-  await fetch(URL + "api/pipeline", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(backup) });
   if (v) { const p = await v.path(); fs.renameSync(p, path.join(OUT, "infill-demo.webm")); console.log("saved", path.join(OUT, "infill-demo.webm")); }
 }
